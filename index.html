@@ -33,7 +33,7 @@ const invites = {
   recall:{name:'召回打歌',hint:'＋粉丝　－健康',pay:0},
   variety:{name:'综艺出演',hint:'＋资金　＋粉丝　－健康',pay:2600},
   ad:{name:'广告拍摄',hint:'＋资金　＋粉丝　－健康',pay:6800},
-  audition:{name:'影视试镜',hint:'25% 获得角色 · －健康',pay:0},
+  audition:{name:'影视试镜',hint:'40% 获得角色 · －健康',pay:0},
   solo:{name:'个人 Solo 作品邀约',hint:'启动制作 · 4 周后完成',pay:0}
 };
 const activities = {
@@ -190,6 +190,10 @@ function planLabel(plan){
   if(plan.type==='concert')return venues[plan.venue].name;
   return activities[plan.type].name;
 }
+function healthWarning(ids){
+  const names=ids.map(person).filter(p=>p&&!lock(p)&&p.health<=60).map(p=>p.name);
+  return names.length?' · 健康预警：'+names.join('、'):'';
+}
 function planOwner(plan){
   if(plan.type==='festival')return festivalLineup(plan).map(key=>festivalName(key)).join('、');
   return target(plan.target)?.name||plan.lineup?.map(k=>target(k)?.name).filter(Boolean).join('、')||plan.people?.map(k=>person(k)?.name).filter(Boolean).join('、')||work(plan.ref)?.title||'';}
@@ -198,7 +202,7 @@ function weekPage(){
   const queue=[0,1,2,3].map(i=>{
     const plan=state.queue[i];
     return '<div class="card slot row spread">'+(plan?
-      '<div><small>第 '+(i+1)+' 周</small><h3>'+escape(planLabel(plan))+'</h3><small>'+escape(planOwner(plan))+'</small><small>'+escape(plan.type==='show'?(stations[plan.station].fans?'需超过 '+money(stations[plan.station].fans)+' 粉丝':'0 粉丝可上')+' · 费用 '+money(planCost(plan)):activities[plan.type].hint)+'</small></div><div class="row">'+(fixedPlan(plan)?'<span class="tag">固定档期</span>':button('替换','schedule',i)+button('移除','remove',i))+'</div>':
+      '<div><small>第 '+(i+1)+' 周</small><h3>'+escape(planLabel(plan))+'</h3><small>'+escape(planOwner(plan)+healthWarning(planPeople(plan)))+'</small><small>'+escape(plan.type==='show'?(stations[plan.station].fans?'需超过 '+money(stations[plan.station].fans)+' 粉丝':'0 粉丝可上')+' · 费用 '+money(planCost(plan)):activities[plan.type].hint)+'</small></div><div class="row">'+(fixedPlan(plan)?'<span class="tag">固定档期</span>':button('替换','schedule',i)+button('移除','remove',i))+'</div>':
       '<small>第 '+(i+1)+' 周</small>'+button('＋ 安排行程','schedule',i))+'</div>';
   }).join('');
   const inbox=state.inbox.filter(offerVisible).sort((a,b)=>a.expiry-b.expiry).map(i=>{
@@ -261,7 +265,7 @@ function companyPage(){
 function confirmAction(title,body,action,arg){
   open(title,'<p>'+escape(body)+'</p>'+button('确认',''+action,arg,'primary'));
 }
-const auditionActivity={name:'影视试镜',hint:'25% 获得角色　－健康',cost:0};
+const auditionActivity={name:'影视试镜',hint:'40% 获得角色　－健康',cost:0};
 activities.audition=auditionActivity;
 const genres=['流行','舞曲','抒情','嘻哈','摇滚'];
 const promoFees=[2000,8000,20000];
@@ -338,7 +342,7 @@ function schedule(slot){
 }
 function mixedMemberFields(){
   const memberRows=people=>'<div class="plan-choices">'+people.map(p=>
-    '<label '+Object.keys(sortStats).map(stat=>'data-'+stat+'="'+p[stat]+'"').join(' ')+'><input type="checkbox" name="member" value="'+p.id+'"> '+escape(p.name)+'</label>').join('')+'</div>';
+    '<label '+Object.keys(sortStats).map(stat=>'data-'+stat+'="'+p[stat]+'"').join(' ')+'><input type="checkbox" name="member" value="'+p.id+'"> '+escape(p.name+healthWarning([p.id]))+'</label>').join('')+'</div>';
   const available=state.people.filter(p=>!lock(p));
   const groups=state.groups.filter(g=>!g.closed).map(g=>{
     const members=available.filter(p=>g.members.includes(p.id));
@@ -358,7 +362,7 @@ function dutyForm(type,slot=-1,preselect='',ref=0,trainingGroup=''){
   let rows=[];
   if(usingWork){
     rows=state.works.filter(w=>workEligible(w,type)&&(!ref||w.id===ref)&&(!preselect||w.owner===preselect)&&(type!=='sale'||slot<0||canSignAt(w,slot)))
-      .map(w=>[w.id,w.title+' · '+target(w.owner).name+(type==='show'?' · '+money(target(w.owner).fans)+' 粉丝':'')]);
+      .map(w=>[w.id,w.title+' · '+target(w.owner).name+(type==='show'?' · '+money(target(w.owner).fans)+' 粉丝':'')+healthWarning(performers(w.owner).map(p=>p.id))]);
   }else if(!['scout','recruit'].includes(type)){
     rows=listNames((['album','groupwrite'].includes(type)?units().filter(([,a])=>type!=='groupwrite'||a.members):type==='warm'?activePeople().filter(([,p])=>p.status==='artist'):
       type==='audition'?activePeople().filter(([,p])=>p.status==='artist'):activePeople()).filter(([key])=>!preselect||key===preselect));
@@ -450,7 +454,48 @@ function groupPage(g){
   open(g.name,termInfo(g)+'<p>'+g.members.length+' 名成员 · '+money(g.fans)+' 组合粉丝</p>'+
     '<div class="row">'+g.members.map(k=>button(person(k).name,'person',k)).join(' ')+'</div>'+
     textBlock('团体业务','<div class="row">'+button('团名修改','grouprename',g.id)+(pendingAmount(g)?button('团体结算','split','g:'+g.id):'')+button('制作作品','forplan','album:g:'+g.id)+button('打歌','forplan','show:g:'+g.id)+button('路演','forplan','road:g:'+g.id)+button('签售','forplan','sale:g:'+g.id)+'</div>')+
-    button('解散团体','dissolveask',g.id,'danger',g.members.some(k=>lock(person(k)))));
+    button('调整成员','roster',g.id)+' '+button('解散团体','dissolveask',g.id,'danger',g.members.some(k=>lock(person(k)))));
+}
+function rosterCandidates(){
+  return state.people.filter(p=>!lock(p)&&!groupOf(p)&&p.cool<=state.week);
+}
+function rosterForm(g){
+  if(!g)return;
+  const candidates=rosterCandidates();
+  const choice=(p,name)=>'<label><input type="checkbox" name="'+name+'" value="'+p.id+'"'+(lock(p)?' disabled':'')+'> '+escape(p.name)+(lock(p)?' · 暂不可调整':'')+'</label>';
+  open('调整成员 · '+g.name,'<p>调整后须保留 2～13 人。离队成员留在公司，组合可能掉粉。</p>'+
+    '<form id="roster" data-group="'+g.id+'"><h3>移除成员</h3>'+g.members.map(person).map(p=>choice(p,'remove')).join('')+
+    '<h3>添加成员</h3>'+(candidates.map(p=>choice(p,'add')).join('')||'<p>暂无可加入的成员。</p>')+
+    '<div class="row"><button class="primary">确认调整</button>'+button('返回团体详情','group',g.id)+'</div></form>');
+}
+function submitRoster(form){
+  const g=team(Number(form.dataset.group)), data=new FormData(form);
+  if(!g)return;
+  const remove=[...new Set(data.getAll('remove').map(Number))];
+  const add=[...new Set(data.getAll('add').map(Number))];
+  const eligible=new Set(rosterCandidates().map(p=>p.id));
+  if(remove.some(id=>!g.members.includes(id)||lock(person(id)))||add.some(id=>!eligible.has(id))){
+    error('有成员已无法调整，请重新选择。');return;
+  }
+  const members=g.members.filter(id=>!remove.includes(id)).concat(add);
+  if(members.length<2||members.length>13){error('调整后必须有 2～13 名成员。');return;}
+  if(!remove.length&&!add.length){error('请至少选择一位要添加或移除的成员。');return;}
+  const departed=remove.map(person);
+  const before=g.fans;
+  g.fans=Math.max(0,before-groupDepartureLoss(g,departed,true));
+  g.members=members;
+  for(const p of departed){
+    if(!p.solo){
+      p.status='trainee';
+      delete p.term;delete p.soloPromise;
+      const key='p:'+p.id;
+      state.inbox=state.inbox.filter(offer=>offer.target!==key);
+    }
+  }
+  for(const id of add)person(id).status='artist';
+  (state.fanNews??=[]).push(g.name+' · 已调整成员'+(add.length?' · 加入 '+add.map(id=>person(id).name).join('、'):'')+
+    (departed.length?' · 离队 '+departed.map(p=>p.name).join('、'):'')+(before>g.fans?' · 组合粉丝 −'+money(before-g.fans):''));
+  finish();groupPage(g);
 }
 function personPage(p){
   const g=groupOf(p);
@@ -461,7 +506,10 @@ function personPage(p){
     (p.solo?'<div class="row">'+button(p.soloPromise?'个人作品待安排':'制作个人作品','forplan','album:p:'+p.id)+button('结束 Solo 企划','endsoloask',p.id,'',Boolean(lock(p)))+'</div>':'')+'<div class="row">'+button('改名','rename',p.id)+(state.popoBusiness&&p.fans>=10000&&!p.popo?button('开通 Popotalk','popoapply',p.id):'')+(pendingAmount(p)?button('个人结算','split','p:'+p.id):'')+(p.shelved?button('恢复公开活动','unshelve',p.id):'')+button('沟通','talk',p.id)+button('解约','dismissask',p.id,'danger',Boolean(lock(p)))+'</div>');
 }
 function termOptions(){return options([1,2,3].map(n=>[n,n+' 年']));}
-function termFee(a){return Math.min(a.members?9000:4000,Math.floor(a.fans/50000)*(a.members?1800:800));}
+function termFee(a){
+  const tier=[10000,30000,60000,100000,150000].filter(min=>a.fans>=min).length;
+  return tier*(a.members?1800:800);
+}
 function startTerm(a,years){a.term={years,ends:state.week+years*48};}
 function termInfo(a){
   if(!a.term)return '';
@@ -495,7 +543,7 @@ function contractMonth(){
     else if(state.week>=term.ends){
       if(term.expired!==true){term.expired=true;notice('企划合约到期 · '+a.name,'可以续约，或让艺人留社重新组队。','termoffer:'+key);}
     }else if((term.ends-state.week)%48===0){
-      const fee=Math.min(state.cash,termFee(a));
+      const fee=Math.min(availableCash(),termFee(a));
       if(fee){changeCash(-fee);log(a.name+' · 企划年费 −'+money(fee));}
     }
   }
@@ -533,11 +581,15 @@ function closeGroup(g){
   state.inbox=state.inbox.filter(i=>i.target!==key);
   cancelPlans([key]);
 }
+function groupDepartureLoss(group,departed,peaceful){
+  const sum=group.members.map(person).reduce((n,a)=>n+a.fans,0);
+  const share=sum?departed.reduce((n,p)=>n+p.fans,0)/sum:departed.length/group.members.length;
+  return Math.round(group.fans*share*(peaceful?.32:.73));
+}
 function removeMember(p,leave,peaceful){
   const group=groupOf(p), key='p:'+p.id;
   if(group){
-    const sum=group.members.map(person).reduce((n,a)=>n+a.fans,0);
-    const loss=Math.round(group.fans*(sum?p.fans/sum:1/group.members.length)*(peaceful?.32:.73));
+    const loss=groupDepartureLoss(group,[p],peaceful);
     group.fans=Math.max(0,group.fans-loss);
     group.members=group.members.filter(i=>i!==p.id);
     if(group.members.length<2)closeGroup(group);
@@ -565,6 +617,7 @@ function adjust(key,amount,groupShare=true){
 }
 function health(key,amount){for(const p of performers(key))p.health=limit(p.health+amount);}
 let monthCash=null;
+function availableCash(){return Math.max(0,state.cash); }
 function changeCash(amount){
   state.cash+=amount;
   if(monthCash){if(amount>0)monthCash.income+=amount;else monthCash.expense-=amount;}
@@ -610,7 +663,7 @@ function appearancePay(type,fans){
 }
 function audition(key,touched){
   physical({target:key},touched);
-  if(random(1,100)>25)return;
+  if(random(1,100)>40)return;
   const title=pick(['窗边的来信','再见，星期五','第六站','寄来的冬天']);
   state.roles.push({id:id(),title,target:key,status:'auto',air:state.week-state.week%4+4});
 }
@@ -621,9 +674,11 @@ function filmResults(){
     role.status='broadcast';
     const actor=target(role.target);
     if(!actor)continue;
-    const hit=random(1,100)<=45, gain=hit?random(450,1100):0;
-    if(gain)adjust(role.target,gain);
-    results.push(actor.name+' · 《'+role.title+'》'+(hit?'剧情大火！粉丝 +'+money(gain):'剧本扑了！没有任何影响。'));
+    const hit=random(1,100)<=45, gain=hit?random(1500,3500):random(300,800);
+    const pay=random(4000,8000);
+    income(pay,role.target);
+    adjust(role.target,gain);
+    results.push(actor.name+' · 《'+role.title+'》'+(hit?'剧情大火':'反响平平')+' · 粉丝 +'+money(gain)+' · 片酬 +'+money(pay));
   }
   return results;
 }
@@ -668,9 +723,8 @@ function runPlan(p,touched){
     }
     case 'road': case 'warm': {
       const incident=collapse(physical(p,touched)), warm=p.type==='warm';
-      income(warm?(p.hometownPay??2000):4400+Math.min(2700,Math.floor(a.fans/12)),p.target);
-      coverage(p.target,incident?[20,110]:warm?[35,125]:[105,385]);
-      if(!warm)activitySales(w,a,incident?.4:1);
+      income(warm?(p.hometownPay??2000):random(3000,4500),p.target);
+      coverage(p.target,incident?[20,110]:warm?[35,125]:[220,500]);
       log(a.name+(warm?'完成家乡动员。':'完成地方路演，场地方已结款。'));break;
     }
     case 'sale':
@@ -732,7 +786,7 @@ function familySongs(keys){
     return [{id:w.id+':main',key,title:main?.title||w.title},...(w.tracks||[]).filter(id=>id!==w.main).map(id=>({id:w.id+':'+id,key,title:state.songs.find(song=>song.id===id)?.title})).filter(song=>song.title)];
   }));
 }
-function concertProfitFloor(venue){return ({local:3500,arena:10000,abroad:25000,family:14000,tour:40000})[venue];}
+function concertProfitFloor(venue){return ({local:9000,arena:10000,abroad:25000,family:14000,tour:40000})[venue];}
 function concertBoxOffice(venue,fans,songs=3){
   const spec=venues[venue];
   return Math.round(fans*spec.rate*(venue==='family'?1+.12*Math.log2(Math.max(3,songs)/3):1));
@@ -1011,7 +1065,7 @@ function processWages(){
     changeCash(20000);log('发现备用金 · 资金 +20,000');
     milestone('aid','办公桌下的备用金',state.player+'，桌子底下有一块地板是松的。掀开看看，里面是我走之前留下的两万。要是工资还没发，就先拿去用。\n发现备用金 · 资金 +20,000');
   }
-  const paid=Math.min(due,state.cash);changeCash(-paid);state.arrears=due-paid;
+  const paid=Math.min(due,availableCash());changeCash(-paid);state.arrears=due-paid;
   if(state.arrears){
     log('已付工资 '+money(paid)+'，仍欠薪 '+money(state.arrears)+'。可借款、接业务或到财务补发。');
     for(const p of state.people)p.mood='工资延期';
@@ -1114,8 +1168,8 @@ function expireOffer(offer,reason){
 }
 function checkHealth(p){
   if(!person(p.id)||p.leaving)return;
-  if(p.health>=20)p.red=false;
-  if(p.health<20&&!p.red){
+  if(p.health>=20&&!p.forcedRest)p.red=false;
+  if(p.health<20&&!p.red&&!p.forcedRest){
     p.red=true;
     if(p.savedOnce){
       const name=p.name;
@@ -1129,16 +1183,16 @@ function checkHealth(p){
     }
     return;
   }
-  if(p.health<=50&&!p.warned){
+  if(p.health<=60&&!p.warned){
     p.warned=true;
     (state.warnings??=[]).push({name:p.name,health:p.health,week:state.week%4+1,id:p.id});
   }
-  if(p.health<45&&groupOf(p)&&!p.sick){
+  if(p.health<45&&(groupOf(p)||p.solo)&&!p.sick){
     p.sick=true;
     log(p.name+'进入病休。');
   }
-  if(p.health>=65&&p.sick){p.sick=false;p.forcedRest=false;log(p.name+'结束病休，下一周恢复活动。');}
-  if(p.health>50)p.warned=false;
+  if(p.health>=65&&p.sick){p.sick=false;p.forcedRest=false;p.red=false;log(p.name+'结束病休，下一周恢复活动。');}
+  if(p.health>60)p.warned=false;
 }
 function festivalCandidates(){
   return units().filter(([key,a])=>a.fans>=(a.members?80000:25000)
@@ -1201,7 +1255,7 @@ function validateExecution(plan){
   if(plan.type==='sale'&&(w.old||w.format!=='专辑'||state.week<=w.released||state.week>w.released+24))return '超出发行后六个月签售窗口';
   if(plan.type==='album'&&plan.tracks?.some(k=>state.songs.find(s=>s.id===k)?.used))return '所选歌曲已经用于其他作品';
   const perPerson=Boolean(plan.people)||(['vocal','dance','beauty'].includes(plan.type)&&(a?.members||plan.lineup));
-  if(planCost(plan)*(perPerson?actual.length:1)>state.cash)return '余额不足';
+  if(planCost(plan)*(perPerson?actual.length:1)>availableCash())return '余额不足';
   plan.active=actual;
   return '';
 }
@@ -1245,35 +1299,35 @@ function runSigning(plan,w,artist,touched,mode){
     const fatigue=w[field]>=(video?6:4)?1.5:1;
     p.health=limit(p.health-Math.ceil(base*(video?.5:1)*fatigue));
   }
-  const pay=Math.round((1500+Math.round(artist.fans*.46))*random(78,122)/100*demand*(video?.85:1));
+  const pay=Math.round(Math.min(18000,4000+artist.fans*.04)*demand*(video?.85:1));
   income(pay,plan.target);
   log('《'+w.title+'》'+label+' · 资金 +'+money(pay)+(demand<1?' · 购买力回落':''));
-  activitySales(w,artist,demand);
+  signingSales(w,artist,demand,video);
   if(w.signings>8&&random(1,100)<=5){adjust(plan.target,-random(30,140));log('签售过密引发疲劳，部分粉丝取消关注。');}
   else if(attendees.some(p=>p.health<32)&&random(1,100)<=32){adjust(plan.target,-random(30,110));log('签售疲态引发议论。');}
-  else coverage(plan.target,[135,540],4);
+  else coverage(plan.target,video?[50,150]:[80,200],4);
 }
-function activitySales(w,a,scale){
+function signingSales(w,a,demand,video){
   if(!w||w.old||w.format!=='专辑'||state.week<=w.released||state.week>w.released+24)return;
-  const sold=Math.round((30+a.fans*.035)*scale*random(75,125)/100*salesFactor(w,false));
+  const sold=Math.round(a.fans*(video?random(40,100):random(50,120))*demand/10000);
   w.sales=(w.sales||0)+sold;
   const pay=sold*albumUnitProfit(w);
   income(pay,w.owner);
-  log('《'+w.title+'》活动带动销量 +'+money(sold)+' · 资金 +'+money(pay));
+  log('《'+w.title+'》签售应募销量 +'+money(sold)+' · 资金 +'+money(pay));
 }
 function albumUnitProfit(w){return w.merch?35:30;}
-function salesFactor(w,launch){
+function launchSalesFactor(w){
   const reception=w.reception==='大爆'?1.85:w.reception==='大失败'?.55:1;
-  return reception*(launch&&state.newsGenre===w.genre?1.2:1);
+  return reception*(state.newsGenre===w.genre?1.2:1);
 }
 function salesTick(){
   for(const w of state.works.filter(w=>w.status==='released'&&!w.old)){
     const age=state.week-w.released;
-    if(![0,4,8].includes(age)||w.salesAt?.includes(age))continue;
+    if(age!==0||w.salesAt?.includes(0))continue;
     const a=target(w.owner);
     if(!a)continue;
     (w.salesAt??=[]).push(age);
-    const sold=Math.round(a.fans*random(20,75)/100*(age===0?1:age===4?.32:.14)*salesFactor(w,age===0));
+    const sold=Math.round(a.fans*random(20,75)/100*launchSalesFactor(w));
     w.sales=(w.sales||0)+sold;
     const pay=sold*albumUnitProfit(w);income(pay,w.owner);
     log('《'+w.title+'》销量 +'+money(sold)+' · 资金 +'+money(pay));
@@ -1538,6 +1592,14 @@ function extraInvites(){
     if(p&&!state.events.some(e=>e.type==='truck'&&e.person===p.id))state.events.push({id:id(),type:'truck',person:p.id});
   }
 }
+function debutOdds(p){
+  const stats=[p.vocal,p.dance,p.beauty];
+  if(Math.min(...stats)<50)return 0;
+  const average=stats.reduce((sum,value)=>sum+value,0)/3;
+  if(average>=90)return 100;
+  const base=average>=85?85:average>=75?60:average>=65?30:15;
+  return Math.min(95,base+(Math.max(...stats)>=90?10:0));
+}
 function seasonCheck(){
   const m=month(state.week), y=year(state.week);
   for(const p of [...state.people]){
@@ -1566,7 +1628,7 @@ function seasonCheck(){
   const center=qualified.filter(p=>p.health>=65&&Math.min(p.vocal,p.dance,p.beauty)>=95).sort((a,b)=>score(b)-score(a)||a.id-b.id)[0];
   const results=[];
   for(const p of candidates){
-    const success=qualified.includes(p)&&(Math.max(p.vocal,p.dance,p.beauty)>=85||random(1,100)<=25);
+    const success=qualified.includes(p)&&random(1,100)<=debutOdds(p);
     if(success){p.showLock={until:state.week+48,center:p===center};results.push(p.name+(p===center?' C 位出道':'获得出道位'));}
     else{delete p.showLock;results.push(p.name+'回到公司');}
   }
@@ -1610,7 +1672,7 @@ function promote(w,tier){
     (state.promoEvents??=[]).push({id:id(),work:w.id});
     finish();actions.promoreply(String(state.promoEvents.at(-1).id));
   }else{
-    const gain=random(110,230)*(tier+1);
+    const gain=random(...[[250,600],[900,2000],[2500,5000]][tier]);
     adjust(w.owner,gain);finish();
     open('宣传结果','<p>宣传吸引了新观众。</p><p>资金 −'+money(cost)+' · 粉丝 +'+money(gain)+'</p>');
   }
@@ -1661,14 +1723,14 @@ function refreshNews(opening=false){
 function finance(kind){
   if(kind==='borrow'&&(state.debt||state.loan||state.arrears)){error('请先清偿现有债务和欠薪。');return;}
   const labels={debt:'偿还旧债',borrow:'借款',loan:'偿还借款',arrears:'补发欠薪'};
-  const max=kind==='borrow'?Math.max(0,60000-state.loan):Math.min(state.cash,state[kind]);
+  const max=kind==='borrow'?Math.max(0,60000-state.loan):Math.min(availableCash(),state[kind]);
   open(labels[kind],'<p>当前余额 '+money(state.cash)+' · 下次工资 '+money(wages())+'</p><small>'+
     (kind==='debt'?'旧债可分次还清。还清后解锁自办演唱会。':kind==='borrow'?'可用借款额度 '+money(max)+'，可手动偿还。':'按可用现金偿付。')+
     '</small>'+(max?'<form id="finance" data-kind="'+kind+'"><label>金额<input name="amount" type="number" min="1" max="'+max+'" value="'+max+'" required></label><p>操作后余额 <output id="balance">'+money(state.cash+(kind==='borrow'?max:-max))+'</output></p><button class="primary">确认'+labels[kind]+'</button></form>':'<p>暂无可操作金额。</p>'));
 }
 function submitFinance(form){
   const amount=Number(new FormData(form).get('amount')), kind=form.dataset.kind;
-  const max=kind==='borrow'?60000-state.loan:Math.min(state.cash,state[kind]);
+  const max=kind==='borrow'?60000-state.loan:Math.min(availableCash(),state[kind]);
   if(!Number.isInteger(amount)||amount<1||amount>max){error('请选择有效的金额。');return;}
   if(kind==='borrow'&&(state.debt||state.loan||state.arrears)){error('请先清偿现有债务和欠薪。');return;}
   if(kind==='borrow'){state.cash+=amount;state.loan+=amount;}
@@ -1687,7 +1749,7 @@ function showCandidates(){
 function savedGame(value){
   if(!value||![1,2,3].includes(value.version)||!Number.isInteger(value.week)||value.week<0||!Number.isSafeInteger(value.serial))return false;
   if(!['company','player','groupName','kind'].every(k=>typeof value[k]==='string'))return false;
-  if(!['cash','debt','loan','arrears'].every(k=>Number.isFinite(value[k])&&value[k]>=0))return false;
+  if(!Number.isFinite(value.cash)||!['debt','loan','arrears'].every(k=>Number.isFinite(value[k])&&value[k]>=0))return false;
   if(!['people','groups','works','songs','queue','inbox','events','messages','logs','last','candidates','rivals','roles'].every(k=>Array.isArray(value[k])))return false;
   return value.people.length<=60&&value.queue.length<=4&&value.rivals.length===3&&value.flags&&typeof value.flags==='object';
 }
@@ -1799,6 +1861,7 @@ const actions={
   rename:arg=>changeName(person(Number(arg))),
   grouprename:arg=>changeName(team(Number(arg))),
   talk:arg=>{const p=person(Number(arg));p.mood='沟通良好';save();render();personPage(p);},
+  roster:arg=>rosterForm(team(Number(arg))),
   dissolveask:arg=>{
     const g=team(Number(arg));
     confirmAction('解散 '+g.name,'现有演出停止，成员仍与公司签约。4 周后可以重新组团或 Solo 出道。原团作品保留在发行记录。','dissolve',arg);
@@ -1939,10 +2002,11 @@ document.addEventListener('submit',async event=>{
       finish();if(!showNextNotice())showMonthlyReport();break;
     }
     case 'debut':submitDebut(form);break;
+    case 'roster':submitRoster(form);break;
     case 'renew':{
       const a=target(form.dataset.key), years=Number(data.get('years'));
       if(!a?.term||![1,2,3].includes(years))break;
-      const fee=Math.min(state.cash,termFee(a));
+      const fee=Math.min(availableCash(),termFee(a));
       changeCash(-fee);startTerm(a,years);
       (state.fanNews??=[]).push(a.name+'续约 '+years+' 年 · 资金 −'+money(fee));
       finish();if(!showNextNotice())showMonthlyReport();break;
