@@ -380,7 +380,7 @@ function dutyForm(type,slot=-1,preselect='',ref=0,trainingGroup=''){
     fields+='<label>音乐台<select name="station" required>'+options(stations.map((station,i)=>[i,station.name+' · '+(station.fans?'大于 '+money(station.fans)+' 粉丝':'0 粉丝可上')+' · 费用 '+money(station.cost)]))+'</select></label>'+
       stations.map((station,i)=>textBlock(station.name,'<p>'+escape(station.description)+'</p>'+stationRivals(i).map(r=>'<small>'+escape(r.name)+' · '+money(r.fans)+' 粉丝</small>').join(''))).join('');
   }
-  if(type==='album'&&state.merchBusiness)fields+='<label><input type="checkbox" name="merch"> 含周边开发 · 制作费 +5,000 · 每张净收入 35</label>';
+  if(type==='album'&&state.merchBusiness)fields+='<label><input type="checkbox" name="merch"> 含周边开发 · 制作费 +5,000 · 专辑售价 +15%</label>';
   if(type==='recruit')fields+='<label>招募对象<select name="gender">'+options([sexOptions[2],...sexOptions.slice(0,2)])+'</select></label>';
   if(type==='write'||type==='groupwrite')fields+='<label>曲名（可留空）<input name="title" maxlength="30" placeholder="由成员命名"></label>';
   if(type==='album'){
@@ -1425,9 +1425,9 @@ function showMonthlyReport(){
 const scoutFees=[5000,10000,25000];
 const businesses={
   popo:{name:'Popotalk',flag:'popoBusiness',cost:20000,action:'开通',intro:'聚光灯熄灭，TA 的晚安已送达。',details:'每位开通艺人每月维护费 500。每份订阅每月为公司带来 3 点收益。'},
-  practice:{name:'练习室',flag:'practiceBusiness',cost:20000,action:'建设',intro:'这里是挥洒汗水为梦想努力的地方',details:()=> '当前每月培训成本 '+money(practiceFee())+'。努力的人会被看见。'},
-  cafeteria:{name:'食堂',flag:'cafeteriaBusiness',cost:25000,action:'建设',intro:'公司的减脂餐真的好吃！吗？',details:'每月维护成本 5,000。'},
-  merch:{afterDebt:true,name:'周边自研',flag:'merchBusiness',cost:50000,action:'研发',intro:'又在制作精美小垃圾了',details:'可制作含周边专辑，制作费增加 5,000，每张净收入提高到 35。'},
+  practice:{name:'练习室',flag:'practiceBusiness',cost:20000,action:'建设',intro:'这里是挥洒汗水、为梦想努力的地方。每月可提升部分成员的能力值。努力的人会被看见。',details:()=> '当前每月培训成本 '+money(practiceFee())+'。'},
+  cafeteria:{name:'食堂',flag:'cafeteriaBusiness',cost:25000,action:'建设',intro:'公司的减脂餐真的好吃！吗？每月为成员恢复一定健康值。',details:'每月维护成本 5,000。'},
+  merch:{afterDebt:true,name:'周边自研',flag:'merchBusiness',cost:50000,action:'研发',intro:'又在制作精美小垃圾了。含周边专辑售价提升 15%。',details:'含周边专辑的制作费增加 5,000。'},
   cafe:{afterDebt:true,name:'应援咖啡厅',flag:'cafeBusiness',cost:80000,action:'建设',intro:'今天的咖啡是爱豆的特调',details:'每月维护费 4,000。到店顾客随公司人气浮动，每杯收益 8。'}
 };
 function businessPanel(){
