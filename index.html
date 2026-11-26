@@ -7,6 +7,7 @@
 :root{color-scheme:dark;--bg:#14151f;--card:#202230;--line:#393b50;--text:#f6f3ff;--muted:#b5b3c9;--accent:#dccaff;--green:#a3e0cc}*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#33284a,transparent 480px),var(--bg);color:var(--text);font:16px/1.5 system-ui,sans-serif}main{max-width:680px;margin:auto;padding:24px 16px 110px}h1,h2,h3,p{margin:0 0 10px}h1{font-size:2rem}h2{font-size:1.45rem}h3{font-size:1rem}.muted,small{color:var(--muted)}small{display:block}button,input,select{font:inherit}button,input,select{border:1px solid var(--line);border-radius:12px;padding:9px 12px;color:inherit;background:#292b3d;min-height:44px}button{cursor:pointer}button.primary,nav button.active{background:var(--accent);color:#231a33;border-color:transparent;font-weight:700}button:disabled{opacity:.48;cursor:default}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}input:not([type=checkbox]),select{width:100%}input[type=checkbox]{min-height:auto}label{display:block;margin:8px 0}.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;margin:10px 0}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.spread{justify-content:space-between}.stack{display:grid;gap:8px}.money{color:var(--green);font-weight:700}.slot{min-height:72px}.tag{background:#39304e;color:var(--accent);padding:3px 8px;border-radius:8px;font-size:.8rem}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:6px}.stats div{background:#292b3d;padding:8px;border-radius:10px}nav{position:fixed;bottom:0;left:0;right:0;z-index:2;background:#1b1c29;padding:8px 10px calc(8px + env(safe-area-inset-bottom));border-top:1px solid var(--line)}nav div{display:grid;grid-template-columns:repeat(4,1fr);max-width:660px;margin:auto;gap:6px}dialog{color:var(--text);background:#202230;border:1px solid var(--line);border-radius:20px;width:min(96vw,620px);max-height:85dvh;padding:16px}dialog::backdrop{background:#08090dbb}.story{animation:arrive .35s ease-out}.paper{background:#f3e9d9;color:#29211d;border-radius:4px;padding:24px 16px;margin:22px 0;font-family:serif;box-shadow:5px 7px 0 #0004}.paper h2{font-size:1.9rem}.danger{color:#ffc2cc}@keyframes arrive{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}@media(prefers-reduced-motion:reduce){*{animation:none!important}}
 .news{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:18px;font-size:.86rem;color:var(--accent)}.news span{flex:0 0 100%;scroll-snap-align:start;min-width:0}
 #annualapply label{min-height:44px;display:flex;align-items:center;gap:8px;margin:0}#annualapply label:has(input:disabled){opacity:.45}
+.annual-card{border-color:#8374b9;background:#302847}.annual-card .tag{background:#493969;color:#eee5ff}.month-details{margin:.5rem 0}.month-details summary{cursor:pointer}
 </style>
 </head>
 <body><main id="app"></main><nav id="nav" aria-label="主面板" hidden></nav><dialog id="sheet"></dialog>
@@ -46,7 +47,7 @@ const activities = {
   write:{name:'成员自作曲',hint:'曲库新增 1 首歌　－健康',cost:0},
   album:{name:'专辑制作',hint:'4 周后完成，艺人可照常活动',cost:0},
   release:{name:'发行作品',hint:'＋粉丝',cost:2000},
-  road:{name:'地方路演（团体）',hint:'＋资金　＋粉丝　－健康',cost:0},
+  road:{name:'地方路演',hint:'＋资金　＋粉丝　－健康',cost:0},
   warm:{name:'家乡动员',hint:'＋资金　＋粉丝　－健康',cost:0},
   sale:{name:'专辑签售',hint:'＋资金　＋粉丝　－健康',cost:0},
   show:{name:'音乐台打歌',hint:'＋粉丝　－健康',cost:0},
@@ -214,7 +215,7 @@ function weekPage(){
     (state.events.filter(e=>!person(e.person)?.showLock).map(e=>textBlock(eventTitle(e),button('查看选择','event',e.id))).join(''))+
     (state.promoEvents||[]).map(e=>textBlock('音源注水争议',button('查看公关选项','promoreply',e.id))).join('')+inbox+(annualPending()||state.inbox.length||state.events.length||(state.promoEvents||[]).length?'':'<p class="muted">本月暂无待处理邀约或事件。</p>')+
     textBlock('进行中',projects||'<small>没有制作中的项目。</small>')+
-    textBlock('本期结算',[...(state.fanNews||[]),...state.last].map(l=>'<p>'+escape(l)+'</p>').join('')||'<small>结算本月后可查看结果。</small>');
+    textBlock('本期结算',monthReportBody());
 }
 const sortStats={vocal:'歌唱',dance:'舞蹈',beauty:'颜值',health:'健康'};
 function artistRanking(a,key){
@@ -335,7 +336,7 @@ function schedule(slot){
     [['专辑发行','release'],['打歌舞台','show'],['签售活动','sale'],['公司招募','recruit']].map(([name,type])=>button(name,'planform',type+':'+slot)).join('')+
     button('全员休整','idle',slot)+'</div>');
 }
-function hometownFields(){
+function mixedMemberFields(){
   const memberRows=people=>'<div class="plan-choices">'+people.map(p=>
     '<label '+Object.keys(sortStats).map(stat=>'data-'+stat+'="'+p[stat]+'"').join(' ')+'><input type="checkbox" name="member" value="'+p.id+'"> '+escape(p.name)+'</label>').join('')+'</div>';
   const available=state.people.filter(p=>!lock(p));
@@ -365,19 +366,8 @@ function dutyForm(type,slot=-1,preselect='',ref=0,trainingGroup=''){
   rows=rows.filter(([key])=>usingWork||type==='album'||!performers(key).some(lock));
   const batch=['vocal','dance','beauty','warm'].includes(type)&&!preselect;
   let fields='';
-  if(batch&&type==='warm'){
-    fields=hometownFields();
-  }else if(batch){
-    const groups=state.groups.filter(g=>!g.closed&&performers('g:'+g.id).some(p=>!lock(p)));
-    const people=state.people.filter(p=>!lock(p));
-    const selectedGroup=trainingGroup===''?(type==='warm'?'1':'0'):trainingGroup;
-    if(training||type==='warm'){
-      fields='<div class="row">'+['团体','Solo 艺人','练习生'].map((label,i)=>type==='warm'&&i===0?'':button(label,'trainfilter',type+':'+slot+':'+i,String(i)===selectedGroup?'primary':'')).join('')+'</div>'+
-        '<div class="row"><label>属性筛选<select name="planSort">'+options([['','默认'],...Object.entries(sortStats)])+'</select></label><label>排序<select name="planDirection"><option value="-1">从高到低</option><option value="1">从低到高</option></select></label></div>';
-    }
-    const entries=selectedGroup==='0'?groups:people.filter(p=>selectedGroup==='1'?(p.solo||(type==='warm'&&p.status==='artist'&&!groupOf(p))):p.status==='trainee');
-    fields+=button('全选','selectall')+' '+button('取消全选','selectall','none')+'<div class="plan-choices">'+entries.map(a=>
-      '<label '+Object.keys(sortStats).map(stat=>'data-'+stat+'="'+artistRanking(a,stat)+'"').join(' ')+'><input type="checkbox" name="'+(a.members?'team':'member')+'" value="'+a.id+'"> '+escape(a.name)+'</label>').join('')+'</div>';
+  if(batch){
+    fields=mixedMemberFields();
   }else if(usingWork||!['scout','recruit'].includes(type)){
     if(!rows.length){open(act.name,'<p>目前没有符合条件的作品或艺人。</p>');return;}
     fields='<label>'+(usingWork?'作品':'艺人')+'<select name="'+(usingWork?'ref':'target')+'">'+(type==='release'?rows.map(([id,label])=>{
@@ -435,7 +425,7 @@ function submitPlan(form){
   const selected=data.getAll('member').map(Number);
   const teams=data.getAll('team').map(Number);
   if(['vocal','dance','beauty','warm'].includes(type)&&!p.target&&!selected.length&&!teams.length){error('请至少选择一个对象。');return;}
-  if(type==='warm'&&!p.target){
+  if(['vocal','dance','beauty','warm'].includes(type)&&!p.target){
     p.people=[...new Set([...selected,...teams.flatMap(id=>performers('g:'+id).map(member=>member.id))])]
       .filter(id=>person(id)&&!lock(person(id)));
     if(!p.people.length){error('请选择至少一位可出勤成员。');return;}
@@ -533,7 +523,7 @@ function submitDebut(form){
 }
 function cancelPlans(keys){
   for(const p of state.queue){
-    if(p?.type==='warm'&&p.people)p.people=p.people.filter(id=>!keys.includes('p:'+id));
+    if(p?.people)p.people=p.people.filter(id=>!keys.includes('p:'+id));
   }
   state.queue=state.queue.map(p=>p&&p.type!=='festival'&&(keys.includes(p.target)||p.lineup?.some(k=>keys.includes(k)))&&!fixedPlan(p)?null:p);
 }
@@ -1144,10 +1134,8 @@ function checkHealth(p){
     (state.warnings??=[]).push({name:p.name,health:p.health,week:state.week%4+1,id:p.id});
   }
   if(p.health<45&&groupOf(p)&&!p.sick){
-    const peers=groupOf(p).members.filter(k=>k!==p.id).map(k=>person(k).fans).sort((a,b)=>a-b);
-    const mid=peers.length/2, median=peers.length%2?peers[Math.floor(mid)]:Math.round((peers[mid-1]+peers[mid])/2);
-    const old=p.fans;p.fans=Math.min(old,median);p.sick=true;
-    log(p.name+'进入病休'+(old>p.fans?' · 个人粉丝 −'+money(old-p.fans):'')+'。');
+    p.sick=true;
+    log(p.name+'进入病休。');
   }
   if(p.health>=65&&p.sick){p.sick=false;p.forcedRest=false;log(p.name+'结束病休，下一周恢复活动。');}
   if(p.health>50)p.warned=false;
@@ -1296,15 +1284,15 @@ function completeProjects(){
     if(w.status==='making'&&w.ready<=state.week){w.status='ready';log('《'+w.title+'》制作完成，已放入待发行仓库。');}
   }
 }
-function restWeek(touched,shared){
+function restWeek(touched,shared,companyRest=false){
   const recovery=new Map();
   for(const p of state.people){
-    if(touched.has(p.id)||p.leaving||p.showLock||(!p.sick&&!p.forcedRest&&lock(p)))continue;
+    if(!companyRest&&(touched.has(p.id)||p.leaving||p.showLock||(!p.sick&&!p.forcedRest&&lock(p))))continue;
     const previous=p.health;
-    p.health=limit(p.health+random(3,7));
+    p.health=limit(p.health+(companyRest?random(5,8):random(3,7)));
     const gain=p.health-previous;
     if(!gain)continue;
-    if(!p.sick&&!p.shelved&&!shared.has(p.id)&&p.status==='artist'&&random(1,100)<=5){
+    if(!lock(p)&&!shared.has(p.id)&&p.status==='artist'&&random(1,100)<=5){
       shared.add(p.id);
       const live=random(1,3)===1, viral=live&&random(1,8)===1;
       const fans=viral?1500:random(1,5)===1?-random(3,24):random(10,100);
@@ -1323,13 +1311,14 @@ function advance(){
   if(splitRows().some(([,a])=>a.pendingSplits.some(b=>!b.deferred))){actions.split();return;}
   if(state.events.some(e=>e.type==='critical')){error('请先处理待确认的离社事件。');return;}
   const monthStart=state.week, startCash=state.cash, plan=[...state.queue], shared=new Set();
-  const report=[];
+  const report=[], weeks=[], business=[];
   monthCash={income:0,expense:0};
   state.queue=[];state.warnings=[];
   for(let i=0;i<4;i++){
     state.week=monthStart+i;
     expireCandidates();
-    if(plan[i].legacy)continue;
+    if(plan[i].legacy){weeks.push({title:'第 '+(i+1)+' 周 · 已结算',lines:[]});continue;}
+    const lineStart=report.length;
     state.logs=[];
     completeProjects();
     const task=plan[i], touched=new Set();
@@ -1347,16 +1336,18 @@ function advance(){
       }
     }
     for(const p of [...state.people])checkHealth(p);
-    restWeek(touched,shared);
+    restWeek(touched,shared,task.type==='idle');
     for(const p of [...state.people])checkHealth(p);
     salesTick();
     for(const offer of [...state.inbox])if(offer.expiry<=state.week+1)expireOffer(offer,'已过期');
     if(i===3){
       if(month(state.week)===12)annualBills(year(state.week));
       processWages();
-      monthSystems();
+      monthSystems(business);
     }
     report.push(...state.logs);
+    const lines=report.splice(lineStart);
+    weeks.push({title:name+(owner?' · '+owner:''),lines});
   }
   state.week=monthStart+4;
   state.logs=[];
@@ -1395,9 +1386,10 @@ function advance(){
   delete state.lastFeedback;
   state.fanNews=[];
   refreshNews();
-  const primary=report.filter(line=>/^第 |离社|病休|销量|资金|工资|已付|月度/.test(line)||/病休|健康 −|邀约已过期|喜提一位|惜败|直播|直拍|公关/.test(line));
-  const critical=primary.filter(line=>/离社|病休/.test(line));
-  state.last=[...new Set([...feedback,...[...new Set([...critical,...primary,...report])].slice(0,15)])];
+  const important=lines=>lines.filter(line=>/离社|病休/.test(line));
+  const top=[...new Set([...feedback,...important(weeks.flatMap(week=>week.lines)),...important(report)])];
+  state.last=[...new Set([...top,...weeks.flatMap(week=>week.lines),...report,...business.map(item=>item.summary)])];
+  state.lastReport={top,weeks,other:report,business,balance:{start:startCash,end:state.cash,...monthCash}};
   tab=0;finish();window.scrollTo(0,0);
   if(films.length)notice('试镜后续',films.join('\n'));
   state.monthSummary={week:monthStart,startCash,endCash:state.cash,warnings:state.warnings,...monthCash};
@@ -1405,34 +1397,58 @@ function advance(){
   save();
   if(!showNextNotice())showMonthlyReport();
 }
+function reportLines(lines){return lines.map(line=>'<p>'+escape(line)+'</p>').join('');}
+function reportDetails(title,lines){
+  return lines.length?'<details class="month-details"><summary>'+escape(title)+'</summary>'+reportLines(lines)+'</details>':'<p>'+escape(title)+'</p>';
+}
+function monthReportBody(showBalance=true){
+  const current=state.fanNews||[], report=state.lastReport;
+  if(!report)return reportLines([...current,...state.last])||'<small>结算本月后可查看结果。</small>';
+  const balance=report.balance;
+  return (showBalance&&balance?'<p>期初 '+money(balance.start)+' · 收入 '+money(balance.income)+' · 支出 '+money(balance.expense)+' · 期末 '+money(balance.end)+'</p>':'')+
+    reportLines([...current,...report.top])+
+    report.weeks.map(week=>reportDetails(week.title,week.lines.filter(line=>!report.top.includes(line)))).join('')+
+    (report.other.length?reportDetails('其他月结算明细',report.other.filter(line=>!report.top.includes(line))):'')+
+    (report.business.length?'<h3>业务开发</h3>'+report.business.map(item=>reportDetails(item.summary,item.lines)).join(''):'');
+}
 function showMonthlyReport(){
   const report=state?.monthSummary;
   if(!report)return;
   delete state.monthSummary;save();
   let summary='<p>期初 '+money(report.startCash)+(report.income==null?'':' · 总收入 '+money(report.income)+' · 总支出 '+money(report.expense))+' · 期末 '+money(report.endCash)+'</p>';
   if(report.warnings?.length)summary+=textBlock('病休预警',report.warnings.map(w=>'<p>'+escape(w.name)+' · 第 '+escape(w.week)+' 周健康 '+escape(w.health)+'／100，结算后 '+escape(person(w.id)?.health??'已离社')+'</p>').join('')+'<strong>请注意健康红线。低于 20 会触发离社。</strong>');
-  summary+=state.last.map(line=>'<p>'+escape(line)+'</p>').join('');
+  summary+=monthReportBody(false);
   const annual=splitRows().some(([,a])=>a.pendingSplits.some(b=>!b.deferred));
   open(date(report.week).split('第 1 周')[0]+'结算',summary+button(annual?'查看年度分账':'进入下个月',annual?'split':'close','','primary'));
 }
 
 const scoutFees=[5000,10000,25000];
 const businesses={
-  popo:{name:'Popotalk',flag:'popoBusiness',cost:20000,action:'开通',intro:'聚光灯熄灭，TA 的晚安已送达。',details:'每位开通艺人每月维护费 500。'},
-  practice:{name:'练习室',flag:'practiceBusiness',cost:20000,action:'建设',intro:'这里是挥洒汗水为梦想努力的地方',details:'每月培训成本 4,000，随机抽取 40% 的成员，各提升一项歌唱、舞蹈或颜值 1～3 点。'},
-  cafeteria:{name:'食堂',flag:'cafeteriaBusiness',cost:25000,action:'建设',intro:'公司的减脂餐真的好吃！吗？',details:'每月维护成本 5,000，全员各恢复 3～8 点健康。'},
-  merch:{name:'周边自研',flag:'merchBusiness',cost:50000,action:'研发',intro:'又在制作精美小垃圾了',details:'可制作含周边专辑，制作费增加 5,000，每张净收入提高到 35。'}
+  popo:{name:'Popotalk',flag:'popoBusiness',cost:20000,action:'开通',intro:'聚光灯熄灭，TA 的晚安已送达。',details:'每位开通艺人每月维护费 500。每份订阅每月为公司带来 3 点收益。'},
+  practice:{name:'练习室',flag:'practiceBusiness',cost:20000,action:'建设',intro:'这里是挥洒汗水为梦想努力的地方',details:()=> '当前每月培训成本 '+money(practiceFee())+'。努力的人会被看见。'},
+  cafeteria:{name:'食堂',flag:'cafeteriaBusiness',cost:25000,action:'建设',intro:'公司的减脂餐真的好吃！吗？',details:'每月维护成本 5,000。'},
+  merch:{afterDebt:true,name:'周边自研',flag:'merchBusiness',cost:50000,action:'研发',intro:'又在制作精美小垃圾了',details:'可制作含周边专辑，制作费增加 5,000，每张净收入提高到 35。'},
+  cafe:{afterDebt:true,name:'应援咖啡厅',flag:'cafeBusiness',cost:80000,action:'建设',intro:'今天的咖啡是爱豆的特调',details:'每月维护费 4,000。到店顾客随公司人气浮动，每杯收益 8。'}
 };
 function businessPanel(){
-  return Object.entries(businesses).map(([key, item])=>
-    '<div class="card"><strong>'+item.name+'</strong><p>'+item.intro+'</p><small>'+
-    (state[item.flag]?'已'+item.action:item.action+'费用 '+money(item.cost))+' · '+item.details+'</small>'+
-    (state[item.flag]?(key==='popo'?button('管理艺人开通','popoapply'):''):button('查看'+item.action,'businessask',key))+'</div>'
-  ).join('');
+  return '<div class="row">'+Object.entries(businesses).map(([key,item])=>button(item.name,'businessask',key)).join('')+'</div>';
 }
-function settleFacilities(){
+function practiceFee(){
+  const count=state.people.length;
+  return count<=10?2000:count<=20?3000:4000;
+}
+function settleFacilities(business){
+  if(state.cafeBusiness){
+    const fans=units().reduce((sum,[,a])=>sum+(a.members||!groupOf(a)?a.fans:0),0);
+    const cups=Math.round(fans*random(5,8)/100), revenue=cups*8, fee=4000;
+    changeCash(revenue);changeCash(-fee);
+    const net=revenue-fee;
+    business.push({summary:'应援咖啡厅 · 月净收益 '+(net<0?'−':'+')+money(Math.abs(net)),
+      lines:['公司粉丝 '+money(fans)+' · 售出 '+money(cups)+' 杯 · 收入 +'+money(revenue)+' · 维护费 −'+money(fee)]});
+  }
   if(state.practiceBusiness){
-    changeCash(-4000);
+    const fee=practiceFee();
+    changeCash(-fee);
     const pool=[...state.people], total=Math.round(pool.length*.4), changes=[];
     for(let i=0;i<total;i++){
       const [p]=pool.splice(random(0,pool.length-1),1);
@@ -1440,7 +1456,7 @@ function settleFacilities(){
       p[stat]=limit(before+random(1,3));
       if(p[stat]>before)changes.push(p.name+' '+sortStats[stat]+' +'+(p[stat]-before));
     }
-    (state.fanNews??=[]).push('练习室 · 培训费 −4,000'+(changes.length?' · '+changes.join('、'):''));
+    business.push({summary:'练习室 · 培训费 −'+money(fee)+' · '+changes.length+' 人获得提升',lines:changes});
   }
   if(state.cafeteriaBusiness){
     changeCash(-5000);
@@ -1453,7 +1469,7 @@ function settleFacilities(){
       checkHealth(p);
     }
     const changes=[...recovery].map(([gain,names])=>names.join('、')+' 健康 +'+gain);
-    (state.fanNews??=[]).push('食堂 · 维护费 −5,000'+(changes.length?' · '+changes.join(' · '):''));
+    business.push({summary:'食堂 · 维护费 −5,000 · '+[...recovery.values()].flat().length+' 人恢复健康',lines:changes});
   }
 }
 function queuePopo(){
@@ -1463,8 +1479,8 @@ function queuePopo(){
   rows.forEach(p=>{p.popoInvited=true;});
   notice('Popotalk 开通邀请',rows.map(p=>p.name).join('、')+'已达到 10,000 粉丝。每位开通艺人每月维护费 500。','popoapply');
 }
-function monthSystems(){
-  settleFacilities();
+function monthSystems(business){
+  settleFacilities(business);
   for(const scout of state.scouts||[]){
     const {level,gender}=typeof scout==='number'?{level:scout,gender:'不限'}:scout;
     const fee=scoutFees[level];
@@ -1472,12 +1488,19 @@ function monthSystems(){
     if(state.candidates.length>=24){log('候选人名单已满，星探本月暂停。');continue;}
     changeCash(-fee);
     const p=addCandidate(gender,random(1,100)<[9,18,32][level]);
-    const stat=pick(['vocal','dance','beauty']);p[stat]=Math.max(p[stat],random([70,80,90][level],[87,95,100][level]));log('星探带来 '+p.name+' · 资金 −'+money(fee));
+    if(p.status==='trainee'&&level>0&&random(1,100)<=[0,25,45][level]){
+      p.fans=random(1,[0,500,1005][level]);
+    }
+    const stat=pick(['vocal','dance','beauty']);p[stat]=Math.max(p[stat],random([70,80,90][level],[87,95,100][level]));log('星探带来 '+p.name+' · 资金 −'+money(fee)+(p.fans?' · 自带 '+money(p.fans)+' 粉丝':''));
   }
+  const subscriptionsReport=[];
+  let totalPopoIncome=0;
   for(const p of state.people.filter(p=>p.popo)){
     const subscriptions=Math.round(p.fans*.06), cash=subscriptions*3;
-    income(cash,'p:'+p.id);changeCash(-500);log(p.name+'的 Popotalk · '+money(subscriptions)+' 订阅 · 资金 +'+money(cash)+' · 维护费 −500');
+    income(cash,'p:'+p.id);changeCash(-500);totalPopoIncome+=cash;
+    subscriptionsReport.push(p.name+' · '+money(subscriptions)+' 订阅 · 资金 +'+money(cash)+' · 维护费 −500');
   }
+  if(subscriptionsReport.length)business.push({summary:'Popotalk · 收入 +'+money(totalPopoIncome)+' · 维护费 −'+money(subscriptionsReport.length*500),lines:subscriptionsReport});
 }
 function recallSong(offer){
   const w=work(offer.work);
@@ -1554,11 +1577,14 @@ function seasonCheck(){
   (state.fanNews??=[]).push('星光闪耀时 · '+result);
   (state.nextNews??=[]).push('星光闪耀时九人限定团：'+roster.join('、'));
 }
+function annualCard(title,contents){
+  return '<section class="card annual-card"><div class="row spread"><h3>'+title+'</h3><span class="tag">年度活动</span></div>'+contents+'</section>';
+}
 function annualPending(){
   const m=month(state.week);
-  return (m>=8&&m<=9&&state.season?.status==='open'?textBlock('星光闪耀时',button('选派练习生','seasonpick')+'<small>9 月底截止</small>'):'')+
-    (m===10&&state.annual?.status==='open'?textBlock('世界中心年末拼盘',button('选择出演阵容','annualapply')+'<small>10 月底截止</small>'):'')+
-    (m===11&&state.familyInvite==='open'?textBlock('家族演唱会',button('提交演出企划','familyjoin')+'<small>11 月底截止</small>'):'');
+  return (m>=8&&m<=9&&state.season?.status==='open'?annualCard('星光闪耀时',button('选派练习生','seasonpick')+'<small>9 月底截止</small>'):'')+
+    (m===10&&state.annual?.status==='open'?annualCard('世界中心年末拼盘',button('选择出演阵容','annualapply')+'<small>10 月底截止</small>'):'')+
+    (m===11&&state.familyInvite==='open'?annualCard('家族演唱会',button('提交演出企划','familyjoin')+'<small>11 月底截止</small>'):'');
 }
 function seasonCandidates(){
   return state.people.filter(p=>p.status==='trainee'&&p.gender===state.season?.gender&&!lock(p));
@@ -1604,16 +1630,16 @@ function annualNews(){
   if(m===8||m===9){
     const names=state.season?.people?.map(id=>person(id)?.name).filter(Boolean)||[];
     const headline='星光闪耀时 · '+(state.season?.gender||(year(state.week)%2?'女':'男'))+'生季开始啦！';
-    lines.push(headline+(names.length?state.company+'派出了'+names.join('、')+'。':'全民制作人请开始投票吧！'));
+    lines.push(headline+(names.length?state.company+'派出了'+names.join('、')+'。':'全民制作人请多多关心吧！'));
   }
   if(m===11){
     const names=state.annual?.status==='booked'?festivalLineup({}).map(festivalName):[];
-    lines.push('世界中心年末拼盘 · '+(names.length?state.company+'派出了'+names.join('、')+'，期待舞台。':'年末拼盘即将开演，敬请期待。'));
+    lines.push('世界中心年末拼盘 · '+(names.length?state.company+'的'+names.join('、')+'要登上年末舞台了，记得来给他们捧场！':'年末拼盘快开演了，你最期待谁的舞台？'));
   }
   if(m===12){
     const plan=state.queue.find(p=>p?.venue==='family');
     const names=plan?.lineup.map(key=>target(key)?.name).filter(Boolean)||[];
-    lines.push('家族演唱会 · '+(names.length?state.company+'将由'+names.join('、')+'登台。':'年末演出季开启，各公司陆续公布阵容。'));
+    lines.push('家族演唱会 · '+(names.length?'平时各跑各的行程，这次终于能一起站上舞台。'+state.company+'家族演唱会见！出演：'+names.join('、')+'。':'年末演出季来了，各家艺人正忙着合体彩排。'));
   }
   return lines;
 }
@@ -1672,12 +1698,20 @@ const actions={
   restart:()=>{state=null;tab=0;artistFilter='团体';finish();},
   businessask:key=>{
     const item=businesses[key];
-    if(!item||state[item.flag])return;
-    open(item.name,'<p>'+item.intro+'</p><p>'+item.action+'费用 '+money(item.cost)+'。'+item.details+'</p>'+
-      button(item.action,'businessstart',key,'primary',state.cash<item.cost)+button('稍后处理','close'));
+    if(!item)return;
+    const details=typeof item.details==='function'?item.details():item.details;
+    const locked=item.afterDebt&&state.debt>0;
+    if(state[item.flag]){
+      open(item.name,'<p>'+item.intro+'</p><p>已'+item.action+'。'+details+'</p>'+
+        (key==='popo'?button('管理艺人开通','popoapply'):''));
+      return;
+    }
+    open(item.name,'<p>'+item.intro+'</p><p>'+item.action+'费用 '+money(item.cost)+'。'+details+'</p>'+
+      button(locked?'还清开局旧债后开放':item.action,'businessstart',key,'primary',locked||state.cash<item.cost)+button('稍后处理','close'));
   },
   businessstart:key=>{
     const item=businesses[key];
+    if(item?.afterDebt&&state.debt>0){error('还清开局旧债后开放。');return;}
     if(!item||state[item.flag]||state.cash<item.cost){error('业务已开通或资金不足。');return;}
     changeCash(-item.cost);state[item.flag]=true;
     if(key==='popo')queuePopo();
@@ -1685,7 +1719,7 @@ const actions={
   },
   popoapply:arg=>{
     const rows=state.people.filter(p=>state.popoBusiness&&!p.popo&&p.fans>=10000&&(!arg||p.id===Number(arg)));
-    open('Popotalk · 艺人开通','<p>聚光灯熄灭，TA 的晚安已送达。</p><p>每位每月维护费 500。</p>'+
+    open('Popotalk · 艺人开通','<p>聚光灯熄灭，TA 的晚安已送达。</p><p>每位每月维护费 500。每份订阅每月为公司带来 3 点收益。</p>'+
       (rows.length?'<form id="popoapply">'+rows.map(p=>'<label><input type="checkbox" name="member" value="'+p.id+'"> '+escape(p.name)+' · '+money(p.fans)+' 粉丝</label>').join('')+'<button class="primary">开通</button>'+button('稍后处理','close')+'</form>':'<p>暂无可开通的艺人。</p>'+button('稍后处理','close')));
   },
   unshelve:arg=>{person(Number(arg)).shelved=false;finish();},
