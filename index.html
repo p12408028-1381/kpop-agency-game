@@ -1289,7 +1289,7 @@ function restWeek(touched,shared,companyRest=false){
   for(const p of state.people){
     if(!companyRest&&(touched.has(p.id)||p.leaving||p.showLock||(!p.sick&&!p.forcedRest&&lock(p))))continue;
     const previous=p.health;
-    p.health=limit(p.health+(companyRest?random(5,8):random(3,7)));
+    p.health=limit(p.health+(companyRest?random(9,13):random(3,7)));
     const gain=p.health-previous;
     if(!gain)continue;
     if(!lock(p)&&!shared.has(p.id)&&p.status==='artist'&&random(1,100)<=5){
