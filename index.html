@@ -197,7 +197,7 @@ function weekPage(){
   const queue=[0,1,2,3].map(i=>{
     const plan=state.queue[i];
     return '<div class="card slot row spread">'+(plan?
-      '<div><small>第 '+(i+1)+' 周</small><h3>'+escape(planLabel(plan))+'</h3><small>'+escape(planOwner(plan))+'</small><small>'+escape(plan.type==='show'?(stations[plan.station].fans?'需超过 '+money(stations[plan.station].fans)+' 粉丝':'0 粉丝可上')+' · 费用 '+money(planCost(plan)):activities[plan.type].hint)+'</small></div><div class="row">'+(plan.type==='festival'?'<span class="tag">固定档期</span>':button('替换','schedule',i)+button('移除','remove',i))+'</div>':
+      '<div><small>第 '+(i+1)+' 周</small><h3>'+escape(planLabel(plan))+'</h3><small>'+escape(planOwner(plan))+'</small><small>'+escape(plan.type==='show'?(stations[plan.station].fans?'需超过 '+money(stations[plan.station].fans)+' 粉丝':'0 粉丝可上')+' · 费用 '+money(planCost(plan)):activities[plan.type].hint)+'</small></div><div class="row">'+(fixedPlan(plan)?'<span class="tag">固定档期</span>':button('替换','schedule',i)+button('移除','remove',i))+'</div>':
       '<small>第 '+(i+1)+' 周</small>'+button('＋ 安排行程','schedule',i))+'</div>';
   }).join('');
   const inbox=state.inbox.filter(offerVisible).sort((a,b)=>a.expiry-b.expiry).map(i=>{
@@ -210,9 +210,9 @@ function weekPage(){
   return '<h2 style="margin-top:16px">月计划 '+state.queue.filter(Boolean).length+' / 4</h2><small>已排项目基础费用 '+money(state.queue.filter(Boolean).reduce((sum,p)=>sum+planCost(p),0))+' · 预计工资 '+money(wages())+'</small>'+queue+
     button('结算本月','advance','','primary',state.queue.filter(Boolean).length!==4)+
     extras()+
-    '<h2 style="margin-top:20px">待处理</h2>'+
+    '<h2 style="margin-top:20px">待处理</h2>'+annualPending()+
     (state.events.filter(e=>!person(e.person)?.showLock).map(e=>textBlock(eventTitle(e),button('查看选择','event',e.id))).join(''))+
-    (state.promoEvents||[]).map(e=>textBlock('音源注水争议',button('查看公关选项','promoreply',e.id))).join('')+inbox+(state.inbox.length||state.events.length||(state.promoEvents||[]).length?'':'<p class="muted">本月暂无待处理邀约或事件。</p>')+
+    (state.promoEvents||[]).map(e=>textBlock('音源注水争议',button('查看公关选项','promoreply',e.id))).join('')+inbox+(annualPending()||state.inbox.length||state.events.length||(state.promoEvents||[]).length?'':'<p class="muted">本月暂无待处理邀约或事件。</p>')+
     textBlock('进行中',projects||'<small>没有制作中的项目。</small>')+
     textBlock('本期结算',[...(state.fanNews||[]),...state.last].map(l=>'<p>'+escape(l)+'</p>').join('')||'<small>结算本月后可查看结果。</small>');
 }
@@ -249,9 +249,10 @@ const milestones=[['release','发行接手后的首部作品'],['paid','还清�
 function companyPage(){
   const ledger='<div class="stats"><div><small>可用现金</small>'+money(state.cash)+'</div><div><small>下次基础工资</small>'+money(wages())+'</div><div><small>旧债</small>'+money(state.debt)+'</div><div><small>借款及欠薪</small>'+money(state.loan+state.arrears)+'</div></div>';
   return textBlock('财务与工资',ledger+'<div class="row" style="margin-top:10px">'+button('偿还旧债','finance','debt','',!state.debt)+button('借款','finance','borrow','',Boolean(state.debt||state.loan||state.arrears))+button('偿还借款','finance','loan','',!state.loan)+button('补发欠薪','finance','arrears','',!state.arrears)+'</div>')+
+    textBlock('业务开发',popoBusiness())+
     textBlock('公司发展',milestones.map(([key,label])=>'<p>'+ (state.flags[key]?'✓　':'○　')+label+'</p>').join(''))+
     textBlock('演唱会',(state.debt?'<p class="muted">还清开局旧债后开放自办演唱会。</p>':'')+
-      '<div class="row">'+Object.keys(venues).map(key=>button(venues[key].name,key==='tour'?'tour':'concert',key,'',Boolean(state.debt)||(key==='family'&&month(state.week)!==12))).join('')+'</div>'+
+      '<div class="row">'+Object.keys(venues).map(key=>button(venues[key].name,key==='tour'?'tour':'concert',key,'',Boolean(state.debt)||(key==='family'&&(month(state.week)!==11||state.familyInvite!=='open')))).join('')+'</div>'+
       (state.tour?'<p>巡演 · '+escape(target(state.tour.target)?.name||'艺人')+' · 已完成 '+state.tour.stops+' / 3 站</p>':''))+
     textBlock('年度分账',splitRows().length?button('查看待分账','split'):'<small>12 月结算后生成账单。</small>')+
     textBlock('存档与短信','<div class="row">'+button('主线短信','messages')+button('导出存档','export')+button('导入存档','import')+button('重新开局','restartask')+'</div>');
@@ -299,9 +300,10 @@ function offerVisible(offer){
   const a=target(offer.target);
   return offer.expiry>state.week&&Boolean(a)&&(a.members?performers(offer.target).some(p=>!p.showLock):!a.showLock);
 }
+function fixedPlan(plan){return plan?.type==='festival'||plan?.familyBooking===true;}
 function enqueue(plan,slot){
   if(!Number.isInteger(slot)||slot<0||slot>3){error('请选择第 1～4 周。');return;}
-  if(state.queue[slot]?.type==='festival'&&plan.type!=='festival'){error('该周已预留年末拼盘。');return;}
+  if(fixedPlan(state.queue[slot])){error('该周已预留年度演出。');return;}
   if(plan.type==='release'&&isPlanned('release',plan.ref,null,slot)){error('这张专辑本月已经安排发行。');return;}
   if(plan.type==='show'&&unavailableStation(work(plan.ref),plan.station,slot)){error('音乐台已安排、已登台或未达到粉丝门槛。');return;}
   if(plan.type==='sale'&&!canSignAt(work(plan.ref),slot)){error('这周已超出签售期，请选择可用周次。');return;}
@@ -324,7 +326,7 @@ function canSignAt(w,slot){
 }
 function directPlan(plan){
   pendingPlan=plan;
-  open('选择执行周','<div class="stack">'+[0,1,2,3].map(i=>button('第 '+(i+1)+' 周 · '+(state.queue[i]?planLabel(state.queue[i]):'空档'),'replace',i,'',state.queue[i]?.type==='festival'||(plan.type==='sale'&&!canSignAt(work(plan.ref),i)))).join('')+'</div>');
+  open('选择执行周','<div class="stack">'+[0,1,2,3].map(i=>button('第 '+(i+1)+' 周 · '+(state.queue[i]?planLabel(state.queue[i]):'空档'),'replace',i,'',fixedPlan(state.queue[i])||(plan.type==='sale'&&!canSignAt(work(plan.ref),i)))).join('')+'</div>');
 }
 let pendingPlan=null;
 function schedule(slot){
@@ -366,6 +368,7 @@ function dutyForm(type,slot=-1,preselect='',ref=0,trainingGroup=''){
       return '<option value="'+id+'"'+(blocked?' disabled':'')+'>'+escape(label+(blocked?' · 本月已安排':''))+'</option>';
     }).join(''):options(rows))+'</select></label>';
   }
+  if(type==='sale')fields+='<label><input type="checkbox" name="signing" value="video"> 视频签售</label><label><input type="checkbox" name="signing" value="offline" checked> 线下签售</label><p>可以在同一周各办一场。</p>';
   if(type==='show'){
     fields+='<label>音乐台<select name="station" required>'+options(stations.map((station,i)=>[i,station.name+' · '+(station.fans?'大于 '+money(station.fans)+' 粉丝':'0 粉丝可上')+' · 费用 '+money(station.cost)]))+'</select></label>'+
       stations.map((station,i)=>textBlock(station.name,'<p>'+escape(station.description)+'</p>'+stationRivals(i).map(r=>'<small>'+escape(r.name)+' · '+money(r.fans)+' 粉丝</small>').join(''))).join('');
@@ -401,6 +404,10 @@ function submitPlan(form){
   const ref=Number(data.get('ref')), entry=work(ref);
   if(['release','show','road','sale'].includes(type)&&!entry){error('请选择可用作品。');return;}
   const p={type,ref,target:entry?.owner||data.get('target')||null};
+  if(type==='sale'){
+    p.signings=data.getAll('signing').filter(kind=>['video','offline'].includes(kind));
+    if(!p.signings.length){error('请至少选择一种签售。');return;}
+  }
   if(type==='show'){
     p.station=Number(data.get('station'));
     if(entry.stations?.includes(p.station)||state.queue.some((other,i)=>i!==slot&&other?.type==='show'&&other.ref===ref&&other.station===p.station)){error('这部作品已经登上过该音乐台。');return;}
@@ -436,7 +443,7 @@ function personPage(p){
     '<p class="muted">'+escape(lockedText(p)||p.mood)+' · 月工资 '+money(p.salary)+'</p><div class="stats">'+
     [['粉丝','fans'],['歌唱','vocal'],['舞蹈','dance'],['颜值','beauty'],['健康','health']].map(([label,key])=>'<div><small>'+label+'</small>'+money(p[key])+'</div>').join('')+'</div>'+
     textBlock('艺人安排','<div class="row">'+['vocal','dance','beauty','write',...(p.status==='artist'?['warm']:[])].map(k=>button(activities[k].name,'forplan',k+':p:'+p.id,'',Boolean(lock(p)))).join(' ')+'</div>')+
-    (p.solo?'<div class="row">'+button(p.soloPromise?'个人作品待安排':'制作个人作品','forplan','album:p:'+p.id)+button('结束 Solo 企划','endsoloask',p.id,'',Boolean(lock(p)))+'</div>':'')+'<div class="row">'+button('改名','rename',p.id)+(p.fans>10000&&!p.popo?button('开通 Popotalk','popo',p.id):'')+(pendingAmount(p)?button('个人结算','split','p:'+p.id):'')+(p.shelved?button('恢复公开活动','unshelve',p.id):'')+button('沟通','talk',p.id)+button('解约','dismissask',p.id,'danger',Boolean(lock(p)))+'</div>');
+    (p.solo?'<div class="row">'+button(p.soloPromise?'个人作品待安排':'制作个人作品','forplan','album:p:'+p.id)+button('结束 Solo 企划','endsoloask',p.id,'',Boolean(lock(p)))+'</div>':'')+'<div class="row">'+button('改名','rename',p.id)+(state.popoBusiness&&p.fans>=10000&&!p.popo?button('开通 Popotalk','popoapply',p.id):'')+(pendingAmount(p)?button('个人结算','split','p:'+p.id):'')+(p.shelved?button('恢复公开活动','unshelve',p.id):'')+button('沟通','talk',p.id)+button('解约','dismissask',p.id,'danger',Boolean(lock(p)))+'</div>');
 }
 function termOptions(){return options([1,2,3].map(n=>[n,n+' 年']));}
 function termFee(a){return Math.min(a.members?9000:4000,Math.floor(a.fans/50000)*(a.members?1800:800));}
@@ -500,7 +507,7 @@ function submitDebut(form){
   finish();
 }
 function cancelPlans(keys){
-  state.queue=state.queue.map(p=>p&&p.type!=='festival'&&(keys.includes(p.target)||p.lineup?.some(k=>keys.includes(k)))?null:p);
+  state.queue=state.queue.map(p=>p&&p.type!=='festival'&&(keys.includes(p.target)||p.lineup?.some(k=>keys.includes(k)))&&!fixedPlan(p)?null:p);
 }
 function closeGroup(g){
   const key='g:'+g.id;
@@ -648,18 +655,9 @@ function runPlan(p,touched){
       if(!warm)activitySales(w,a,incident?.4:1);
       log(a.name+(warm?'完成家乡动员。':'完成地方路演，场地方已结款。'));break;
     }
-    case 'sale': {
-      w.signings=(w.signings??(w.signed?1:0))+1;
-      const demand=Math.max(.28,Math.pow(.94,w.signings-1)*Math.pow(.90,Math.max(0,w.signings-8)));
-      const ps=physical(p,touched);
-      const base=1500+Math.round(a.fans*.46);
-      income(Math.round(base*random(78,122)/100*demand),p.target);
-      log('《'+w.title+'》第 '+w.signings+' 场签售'+(demand<1?' · 购买力回落':'')+'。');
-      if(w.signings>8&&random(1,100)<=5){adjust(p.target,-random(30,140));log('签售过密引发疲劳，部分粉丝取消关注。');}
-      else if(ps.some(a=>a.health<32)&&random(1,100)<=32){adjust(p.target,-random(30,110));log('签售疲态引发议论。');}
-      else coverage(p.target,[135,540],4);
-      log((w.tracks?.length?'有粉丝请成员在自己写的歌词页签名。':'签售结束，现场销售已结款。'));break;
-    }
+    case 'sale':
+      for(const mode of p.signings||['offline'])runSigning(p,w,a,touched,mode);
+      break;
     case 'show': {
       w.stations=(w.stations||[]).concat(p.station);
       const rivals=(p.rivals||stationRivals(p.station)).map(r=>stationEligible(r.fans,stations[p.station])?r:{...r,fans:stations[p.station].fans+1}), higher=rivals.filter(r=>r.fans>a.fans).length;
@@ -695,15 +693,13 @@ function showNextNotice(){
   const item=state?.notices?.[0];
   if(!item)return false;
   open(item.title,item.body.split('\n').map(line=>'<p>'+escape(line)+'</p>').join('')+
-    (item.action?button(item.action.startsWith('termoffer:')?'查看续约':'参加','noticejoin','','primary')+' '+button(item.action.startsWith('termoffer:')?'稍后处理':'暂不参加','noticedismiss'):button('继续','noticedismiss','','primary')));
+    (item.action?button(item.action.startsWith('termoffer:')?'查看续约':item.action==='popoapply'?'选择开通':'查看安排','noticejoin','','primary')+' '+button('稍后处理','noticedismiss'):button('继续','noticedismiss','','primary')));
   sheet.querySelector('[data-action="close"]')?.remove();
   return true;
 }
 function dismissNotice(join=false){
   const item=state.notices.shift();
   if(join&&item.action){save();const [action,...parts]=item.action.split(':');actions[action]?.(parts.join(':'));return;}
-  if(item.action==='annualapply'&&state.annual?.status==='open')state.annual.status='expired';
-  if(item.action==='seasonpick'&&state.season?.status==='open')state.season.status='closed';
   save();
   if(!showNextNotice()){sheet.close();render();showMonthlyReport();}
 }
@@ -731,16 +727,16 @@ function familyFields(rows){
     '<p>预计票房 <output id="ticketEstimate">请先选择阵容和歌单</output></p>';
 }
 function concertForm(venue){
-  if(state.debt){error('还清旧债后开放自办演唱会。');return;}
-  if(venue==='family'&&(month(state.week)!==12||state.familyYear===year(state.week))){open('家族演唱会','<p>每年 12 月可举办一次。</p>');return;}
+  if(state.debt){open('演唱会','<p>还清旧债后开放自办演唱会。</p>');return;}
+  if(venue==='family'&&(month(state.week)!==11||state.familyInvite!=='open')){open('家族演唱会','<p>11 月提交企划，12 月演出。</p>');return;}
   if((venue==='arena'||venue==='abroad')&&!state.flags.local){open('演唱会','<p>需要先办成一次国内小型专场。</p>');return;}
   if(venue==='tour'&&(!state.flags.abroad||!state.tour||state.tour.stops>=3)){error('请先开放并官宣巡演。');return;}
   const spec=venues[venue];
   const rows=units().filter(([key,a])=>eligibleConcert(key,a,venue)&&(venue!=='tour'||key===state.tour.target));
   if(rows.length<(venue==='family'?2:1)){open(spec.name,'<p>目前没有足够的可出演单位。需要已发行作品、可用档期和 '+money(spec.fans)+' 粉丝门槛。</p>');return;}
   open(spec.name,'<p>场馆费用 '+money(spec.cost)+' · 成功举办保底净收益 '+money(concertProfitFloor(venue))+' · 占用 1 格</p><small>＋粉丝　－健康</small><form id="concert" data-venue="'+venue+'">'+
-    (venue==='family'?familyFields(rows):
-      '<label>出演者<select name="target">'+options(listNames(rows))+'</select></label>')+'<button class="primary">加入周计划</button></form>');
+    (venue==='family'?familyFields(rows)+'<label>12 月演出档期<select name="familyWeek">'+options([0,1,2,3].map(i=>[i,'第 '+(i+1)+' 周']))+'</select></label>':
+      '<label>出演者<select name="target">'+options(listNames(rows))+'</select></label>')+'<button class="primary">'+(venue==='family'?'提交企划':'加入周计划')+'</button></form>');
 }
 function tourForm(){
   if(state.tour&&state.tour.stops<3){
@@ -1047,6 +1043,14 @@ function upgrade(value){
   return upgradeMonthly(value);
 }
 function upgradeMonthly(value){
+  value.popoBusiness??=value.people.some(p=>p.popo);
+  if(!value.annualWindowsUpdated){
+    const m=month(value.week);
+    if([8,9].includes(m)&&value.season?.status==='closed'&&value.season.year===year(value.week))value.season.status='open';
+    if(m===10&&(!value.annual||value.annual.status==='expired'))value.annual={status:'open',playWeek:value.week-value.week%4+7};
+    if(m===11)value.familyInvite??='open';
+    value.annualWindowsUpdated=true;
+  }
   for(const p of value.candidates)p.candidateUntil??=value.week+12;
   for(const w of value.works){
     if(w.status!=='released')w.format='专辑';
@@ -1209,16 +1213,40 @@ function runScheduled(plan,touched){
     for(const key of plan.active)runPlan({...plan,active:[key],target:'p:'+key},touched);
   }else runPlan(plan,touched);
 }
+function runSigning(plan,w,artist,touched,mode){
+  const video=mode==='video', label=video?'视频签售':'线下签售';
+  const previous=w.signings??(w.signed?1:0);
+  w.videoSignings??=0;
+  w.offlineSignings??=Math.max(0,previous-w.videoSignings);
+  w.signings=previous+1;
+  const field=video?'videoSignings':'offlineSignings';
+  w[field]++;
+  const demand=Math.max(.28,Math.pow(.94,Math.max(0,w.signings-2))*Math.pow(.90,Math.max(0,w.signings-8)));
+  const attendees=planPeople(plan).map(person);
+  for(const p of attendees){
+    touched.add(p.id);
+    const base=Math.max(1,random(4,8)-(p.popo?2:0));
+    const fatigue=w[field]>=(video?6:4)?1.5:1;
+    p.health=limit(p.health-Math.ceil(base*(video?.5:1)*fatigue));
+  }
+  const pay=Math.round((1500+Math.round(artist.fans*.46))*random(78,122)/100*demand*(video?.85:1));
+  income(pay,plan.target);
+  log('《'+w.title+'》'+label+' · 资金 +'+money(pay)+(demand<1?' · 购买力回落':''));
+  activitySales(w,artist,demand);
+  if(w.signings>8&&random(1,100)<=5){adjust(plan.target,-random(30,140));log('签售过密引发疲劳，部分粉丝取消关注。');}
+  else if(attendees.some(p=>p.health<32)&&random(1,100)<=32){adjust(plan.target,-random(30,110));log('签售疲态引发议论。');}
+  else coverage(plan.target,[135,540],4);
+}
 function activitySales(w,a,scale){
   if(!w||w.old||w.format!=='专辑'||state.week<=w.released||state.week>w.released+24)return;
-  const sold=Math.round((30+a.fans*.035)*scale*random(75,125)/100*salesFactor(w));
+  const sold=Math.round((30+a.fans*.035)*scale*random(75,125)/100*salesFactor(w,false));
   w.sales=(w.sales||0)+sold;
-  income(sold*11,w.owner);
-  log('《'+w.title+'》活动带动销量 +'+money(sold)+' · 资金 +'+money(sold*11));
+  income(sold*30,w.owner);
+  log('《'+w.title+'》活动带动销量 +'+money(sold)+' · 资金 +'+money(sold*30));
 }
-function salesFactor(w){
+function salesFactor(w,launch){
   const reception=w.reception==='大爆'?1.85:w.reception==='大失败'?.55:1;
-  return reception*(state.newsGenre===w.genre?1.2:1);
+  return reception*(launch&&state.newsGenre===w.genre?1.2:1);
 }
 function salesTick(){
   for(const w of state.works.filter(w=>w.status==='released'&&!w.old)){
@@ -1227,9 +1255,9 @@ function salesTick(){
     const a=target(w.owner);
     if(!a)continue;
     (w.salesAt??=[]).push(age);
-    const sold=Math.max(8,Math.round((85+a.fans*.22)*random(80,125)/100*(age===0?1:age===4?.32:.14)*salesFactor(w)*(w.format==='专辑'?1:.55)));
+    const sold=Math.round(a.fans*random(20,75)/100*(age===0?1:age===4?.32:.14)*salesFactor(w,age===0));
     w.sales=(w.sales||0)+sold;
-    const pay=sold*(w.format==='专辑'?11:6);income(pay,w.owner);
+    const pay=sold*30;income(pay,w.owner);
     log('《'+w.title+'》销量 +'+money(sold)+' · 资金 +'+money(pay));
   }
 }
@@ -1309,19 +1337,31 @@ function advance(){
   state.queue=state.carryPlan?[state.carryPlan]:[];
   delete state.carryPlan;
   delete state.startedAt;
-  if(month(state.week)===10){
-    state.annual=festivalCandidates().length?{status:'open',playWeek:state.week+7}:null;
-    if(state.annual)notice('世界中心年末拼盘','是否参加？出演固定占用 11 月第 4 周。','annualapply','annual');
-  }else if(month(state.week)===11&&state.annual?.status==='booked'){
-    state.queue[3]={type:'festival',ref:year(state.week),lineup:festivalLineup({})};
-  }else if(state.annual?.status==='open'||(month(state.week)===12&&state.annual?.status==='booked'))state.annual.status='expired';
-  if(month(state.week)===12&&!state.debt&&state.familyYear!==year(state.week)){
-    notice('家族演唱会','12 月可举办家族演唱会。是否安排旗下艺人参加？','familyjoin','annual');
+  const currentMonth=month(state.week), expired=[];
+  if(currentMonth===10){
+    if(['open','signed'].includes(state.season?.status))expired.push('星光闪耀时 · 报名已过期。');
+    state.annual={status:'open',playWeek:state.week+7};
+    notice('世界中心年末拼盘','可选派 1～2 组，演出固定占用 11 月第 4 周。暂不选择可在待处理事件中报名，10 月底截止。','annualapply','annual');
   }
+  if(currentMonth===11){
+    if(state.annual?.status==='booked')state.queue[3]={type:'festival',ref:year(state.week),lineup:festivalLineup({})};
+    else if(state.annual?.status==='open'){
+      state.annual.status='expired';expired.push('世界中心年末拼盘 · 报名已过期。');
+    }
+    state.familyInvite='open';
+    notice('家族演唱会','企划已放入待处理事件。11 月底前提交，12 月正式演出。自办演唱会需要先还清旧债。','familyjoin','annual');
+  }
+  if(currentMonth===12){
+    if(state.familyInvite==='open')expired.push('家族演唱会 · 企划已过期。');
+    if(state.familyInvite==='booked'&&state.familyPlan)state.queue[state.familyPlan.slot]=state.familyPlan.plan;
+    state.familyInvite='closed';
+    delete state.familyPlan;
+  }
+  queuePopo();
   state.rivals=rivalLineup();
   seasonCheck();contractMonth();spawnInvites();spawnInvites();genEvents();soloEvents();concertFollowups();extraInvites();
   report.push(...state.logs);
-  const feedback=[...unanswered,...(state.fanNews||[]),...films];
+  const feedback=[...expired,...unanswered,...(state.fanNews||[]),...films];
   delete state.lastFeedback;
   state.fanNews=[];
   refreshNews();
@@ -1347,6 +1387,17 @@ function showMonthlyReport(){
 }
 
 const scoutFees=[5000,10000,25000];
+function popoBusiness(){
+  return '<p>Popotalk · '+(state.popoBusiness?'已开通':'开通费用 20,000')+' · 每位每月维护费 500</p>'+
+    (state.popoBusiness?button('管理艺人开通','popoapply'):button('开通业务','popobusiness','','',state.cash<20000));
+}
+function queuePopo(){
+  if(!state.popoBusiness)return;
+  const rows=state.people.filter(p=>!p.popo&&!p.popoInvited&&p.fans>=10000);
+  if(!rows.length)return;
+  rows.forEach(p=>{p.popoInvited=true;});
+  notice('Popotalk 开通邀请',rows.map(p=>p.name).join('、')+'已达到 10,000 粉丝。每位开通艺人每月维护费 500。','popoapply');
+}
 function monthSystems(){
   for(const scout of state.scouts||[]){
     const {level,gender}=typeof scout==='number'?{level:scout,gender:'不限'}:scout;
@@ -1359,7 +1410,7 @@ function monthSystems(){
   }
   for(const p of state.people.filter(p=>p.popo)){
     const subscriptions=Math.round(p.fans*.06), cash=subscriptions*3;
-    income(cash,'p:'+p.id);log(p.name+'的 Popotalk · '+money(subscriptions)+' 订阅 · 资金 +'+money(cash));
+    income(cash,'p:'+p.id);changeCash(-500);log(p.name+'的 Popotalk · '+money(subscriptions)+' 订阅 · 资金 +'+money(cash)+' · 维护费 −500');
   }
 }
 function recallSong(offer){
@@ -1416,7 +1467,7 @@ function seasonCheck(){
       if(!state.events.some(e=>e.type==='privacy'&&e.person===p.id))state.events.push({id:id(),type:'privacy',person:p.id});
     }
   }
-  if(m===8){state.season={year:y,gender:y%2?'女':'男',status:'open',people:[]};notice('星光闪耀时 · '+state.season.gender+'生季','是否选派艺人参选？最多 3 人。','seasonpick','annual');}
+  if(m===8){state.season={year:y,gender:y%2?'女':'男',status:'open',people:[]};notice('星光闪耀时 · '+state.season.gender+'生季','最多选派 3 名符合条件的练习生。暂不选择可在待处理事件中继续报名，9 月底截止。','seasonpick','annual');}
   if(m===10&&['open','signed'].includes(state.season?.status))state.season.status='closed';
   if(m!==2||state.season?.status!=='running')return;
   const candidates=state.season.people.map(person).filter(Boolean);
@@ -1436,6 +1487,15 @@ function seasonCheck(){
   notice('星光闪耀时 · 九人限定团公布',result);
   (state.fanNews??=[]).push('星光闪耀时 · '+result);
   (state.nextNews??=[]).push('星光闪耀时九人限定团：'+roster.join('、'));
+}
+function annualPending(){
+  const m=month(state.week);
+  return (m>=8&&m<=9&&state.season?.status==='open'?textBlock('星光闪耀时',button('选派练习生','seasonpick')+'<small>9 月底截止</small>'):'')+
+    (m===10&&state.annual?.status==='open'?textBlock('世界中心年末拼盘',button('选择出演阵容','annualapply')+'<small>10 月底截止</small>'):'')+
+    (m===11&&state.familyInvite==='open'?textBlock('家族演唱会',button('提交演出企划','familyjoin')+'<small>11 月底截止</small>'):'');
+}
+function seasonCandidates(){
+  return state.people.filter(p=>p.status==='trainee'&&p.gender===state.season?.gender&&!lock(p));
 }
 function extras(){
   const season=state.season;
@@ -1473,9 +1533,28 @@ function rotateNews(){
     ticker.scrollTo({left:cards[(current+1)%cards.length].offsetLeft-cards[0].offsetLeft,behavior:'smooth'});
   },5000);
 }
+function annualNews(){
+  const m=month(state.week), lines=[];
+  if(m===8||m===9){
+    const names=state.season?.people?.map(id=>person(id)?.name).filter(Boolean)||[];
+    const headline='星光闪耀时 · '+(state.season?.gender||(year(state.week)%2?'女':'男'))+'生季开始啦！';
+    lines.push(headline+(names.length?state.company+'派出了'+names.join('、')+'。':'全民制作人请开始投票吧！'));
+  }
+  if(m===11){
+    const names=state.annual?.status==='booked'?festivalLineup({}).map(festivalName):[];
+    lines.push('世界中心年末拼盘 · '+(names.length?state.company+'派出了'+names.join('、')+'，期待舞台。':'年末拼盘即将开演，敬请期待。'));
+  }
+  if(m===12){
+    const plan=state.queue.find(p=>p?.venue==='family');
+    const names=plan?.lineup.map(key=>target(key)?.name).filter(Boolean)||[];
+    lines.push('家族演唱会 · '+(names.length?state.company+'将由'+names.join('、')+'登台。':'年末演出季开启，各公司陆续公布阵容。'));
+  }
+  return lines;
+}
 function newsNotes(){
-  if(!state.news?.length)return '';
-  return '<div class="news card" tabindex="0" aria-label="季度新闻">'+state.news.map(line=>'<span>'+escape(line)+'</span>').join('')+'</div>';
+  const lines=[...annualNews(),...(state.news||[])];
+  if(!lines.length)return '';
+  return '<div class="news card" tabindex="0" aria-label="新闻">'+lines.map(line=>'<span>'+escape(line)+'</span>').join('')+'</div>';
 }
 function refreshNews(opening=false){
   const reports=state.nextNews||[];state.nextNews=[];
@@ -1525,7 +1604,17 @@ const actions={
   sortartists:()=>open('艺人筛选','<form id="artistsort"><label>属性<select name="stat">'+options(Object.entries(sortStats))+'</select></label><label>排序<select name="direction"><option value="-1">从高到低</option><option value="1">从低到高</option></select></label><button>应用</button></form>'),
   restartask:()=>confirmAction('重新开局','此操作会清除当前存档。需要保留时，请先导出存档。','restart',''),
   restart:()=>{state=null;tab=0;artistFilter='团体';finish();},
-  popo:arg=>{person(Number(arg)).popo=true;finish();},
+  popobusiness:()=>confirmAction('开通 Popotalk 业务','一次性费用 20,000。每位开通的艺人每月维护费 500。','popostart'),
+  popostart:()=>{
+    if(state.popoBusiness||state.cash<20000){error('业务已开通或资金不足。');return;}
+    changeCash(-20000);state.popoBusiness=true;
+    queuePopo();finish();showNextNotice();
+  },
+  popoapply:arg=>{
+    const rows=state.people.filter(p=>state.popoBusiness&&!p.popo&&p.fans>=10000&&(!arg||p.id===Number(arg)));
+    open('Popotalk · 艺人开通','<p>每位每月维护费 500。勾选本次要开通的艺人，其余可稍后处理。</p>'+
+      (rows.length?'<form id="popoapply">'+rows.map(p=>'<label><input type="checkbox" name="member" value="'+p.id+'"> '+escape(p.name)+'</label>').join('')+'<button class="primary">确认开通</button></form>':'<p>暂无可开通的艺人。</p>'));
+  },
   unshelve:arg=>{person(Number(arg)).shelved=false;finish();},
   scouts:()=>{
     const current=state.scouts||[];
@@ -1553,7 +1642,9 @@ const actions={
     finish();open('公关结果','<p>'+escape(result)+'</p>');
   },
   seasonpick:()=>{
-    const rows=state.people.filter(p=>p.gender===state.season?.gender&&!lock(p));
+    if(state.season?.status!=='open'||![8,9].includes(month(state.week)))return;
+    const rows=seasonCandidates();
+    if(!rows.length){open('星光闪耀时','<p>暂无符合当季条件的练习生。邀约已放入待处理事件，可在 9 月底前返回选派。</p>');return;}
     open('选派参赛成员','<p>最多选 3 人。参赛期间锁档，结果于次年 2 月公布。</p><form id="season"><label>属性筛选<select name="planSort">'+options([['','默认'],...Object.entries(sortStats)])+'</select></label><label>排序<select name="planDirection"><option value="-1">从高到低</option><option value="1">从低到高</option></select></label><div class="plan-choices">'+rows.map(p=>'<label '+Object.keys(sortStats).map(k=>'data-'+k+'="'+p[k]+'"').join(' ')+'><input name="member" type="checkbox" value="'+p.id+'"> '+escape(p.name)+' · '+Object.entries(sortStats).map(([k,label])=>label+' '+p[k]).join(' · ')+'</label>').join('')+'</div><button>确认派出</button></form>');
   },
   transfer:()=>{
@@ -1577,7 +1668,7 @@ const actions={
   preset:arg=>dutyForm(arg),
   workplan:arg=>{const [type,ref]=arg.split(':');dutyForm(type,-1,'',Number(ref));},
   forplan:arg=>{const [type,...key]=arg.split(':');dutyForm(type,-1,key.join(':'));},
-  remove:arg=>{state.queue[Number(arg)]=null;finish();},
+  remove:arg=>{if(!fixedPlan(state.queue[Number(arg)])){state.queue[Number(arg)]=null;finish();}},
   replace:arg=>enqueue(pendingPlan,Number(arg)),
   advance,
   idle:arg=>enqueue({type:'idle'},Number(arg)),
@@ -1662,7 +1753,7 @@ const actions={
   annualapply:()=>{
     if(state.annual?.status!=='open'||month(state.week)!==10)return;
     const rows=festivalCandidates();
-    if(!rows.length){open('世界中心年末拼盘','<p>当前没有符合条件的出演单位。</p>');return;}
+    if(!rows.length){open('世界中心年末拼盘','<p>当前没有符合条件的出演单位。邀约已放入待处理事件，可在 10 月底前返回报名。</p>');return;}
     open('世界中心年末拼盘 · 报名','<p>任选 1～2 组，可以同类型。所有出演单位共用 11 月第 4 周一个行程格。</p><form id="annualapply">'+rows.map(([key,a])=>
       '<label><input type="checkbox" name="target" value="'+escape(key)+'"> '+escape(a.name)+' · '+(a.members?'团体':'Solo')+' · '+money(a.fans)+' 粉丝</label>').join('')+'<button class="primary" disabled>确认报名</button></form>');
   },
@@ -1723,10 +1814,16 @@ document.addEventListener('submit',async event=>{
       if(!draft.company||!draft.player||!draft.groupName){error('请填写三个名称。');return;}
       intro=1;render();break;
     case 'plan':submitPlan(form);break;
+    case 'popoapply': {
+      const selected=new Set(data.getAll('member').map(Number));
+      if(!state.popoBusiness||!selected.size){error('请勾选要开通的艺人。');return;}
+      for(const p of state.people)if(selected.has(p.id)&&p.fans>=10000)p.popo=true;
+      finish();if(!showNextNotice())showMonthlyReport();break;
+    }
     case 'artistsort':artistSort={key:data.get('stat'),direction:Number(data.get('direction'))};finish();break;
     case 'season': {
       const members=data.getAll('member').map(Number);
-      if(!members.length||members.length>3){error('请选择 1～3 名艺人。');return;}
+      if(state.season?.status!=='open'||![8,9].includes(month(state.week))||!members.length||members.length>3||members.some(id=>!seasonCandidates().some(p=>p.id===id))){error('请选择 1～3 名可参赛的练习生。');return;}
       state.season.people=members;state.season.status='running';
       for(const key of members)person(key).showLock={competing:true};
       finish();if(!showNextNotice())showMonthlyReport();break;
@@ -1760,7 +1857,14 @@ document.addEventListener('submit',async event=>{
         if(hosts.length===1){error('请安排一男一女搭档主持，或两位都不安排。');return;}
         if(songs.length<3||songs.length>8||songs.some(id=>!familySongs(lineup).some(song=>song.id===id))){error('请从已选阵容中勾选 3～8 首歌。');return;}
       }
-      directPlan({type:'concert',venue,target:data.get('target'),...(venue==='family'?{lineup,hosts,songs}:{})});break;
+      if(venue==='family'){
+        const slot=Number(data.get('familyWeek'));
+        if(state.debt||month(state.week)!==11||state.familyInvite!=='open'||![0,1,2,3].includes(slot)){error('当前无法提交家族演唱会企划。');return;}
+        state.familyPlan={slot,plan:{type:'concert',venue,lineup,hosts,songs,familyBooking:true}};
+        state.familyInvite='booked';
+        finish();if(!showNextNotice())showMonthlyReport();break;
+      }
+      directPlan({type:'concert',venue,target:data.get('target')});break;
     }
     case 'announce': {
 
