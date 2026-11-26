@@ -1424,11 +1424,11 @@ function showMonthlyReport(){
 
 const scoutFees=[5000,10000,25000];
 const businesses={
-  popo:{name:'Popotalk',flag:'popoBusiness',cost:20000,action:'开通',intro:'聚光灯熄灭，TA 的晚安已送达。',details:'每位开通艺人每月维护费 500。每份订阅每月为公司带来 3 点收益。'},
-  practice:{name:'练习室',flag:'practiceBusiness',cost:20000,action:'建设',intro:'这里是挥洒汗水、为梦想努力的地方。每月可提升部分成员的能力值。努力的人会被看见。',details:()=> '当前每月培训成本 '+money(practiceFee())+'。'},
-  cafeteria:{name:'食堂',flag:'cafeteriaBusiness',cost:25000,action:'建设',intro:'公司的减脂餐真的好吃！吗？每月为成员恢复一定健康值。',details:'每月维护成本 5,000。'},
-  merch:{afterDebt:true,name:'周边自研',flag:'merchBusiness',cost:50000,action:'研发',intro:'又在制作精美小垃圾了。含周边专辑售价提升 15%。',details:'含周边专辑的制作费增加 5,000。'},
-  cafe:{afterDebt:true,name:'应援咖啡厅',flag:'cafeBusiness',cost:80000,action:'建设',intro:'今天的咖啡是爱豆的特调',details:'每月维护费 4,000。到店顾客随公司人气浮动，每杯收益 8。'}
+  popo:{name:'Popotalk',flag:'popoBusiness',cost:20000,action:'开通',intro:'聚光灯熄灭，TA 的晚安已送达。',fees:'每位开通艺人每月维护费 500。',effect:'每份订阅每月为公司带来 3 点收益。'},
+  practice:{name:'练习室',flag:'practiceBusiness',cost:20000,action:'建设',intro:'这里是挥洒汗水、为梦想努力的地方。',fees:()=> '当前每月培训成本 '+money(practiceFee())+'。',effect:'每月可提升部分成员的能力值。努力的人会被看见。'},
+  cafeteria:{name:'食堂',flag:'cafeteriaBusiness',cost:25000,action:'建设',intro:'公司的减脂餐真的好吃！吗？',fees:'每月维护成本 5,000。',effect:'每月为成员恢复一定健康值。'},
+  merch:{afterDebt:true,name:'周边自研',flag:'merchBusiness',cost:50000,action:'研发',intro:'又在制作精美小垃圾了。',fees:'含周边专辑的制作费增加 5,000。',effect:'含周边专辑售价提升 15%。'},
+  cafe:{afterDebt:true,name:'应援咖啡厅',flag:'cafeBusiness',cost:80000,action:'建设',intro:'今天的咖啡是爱豆的特调',fees:'每月维护费 4,000。',effect:'到店顾客随公司人气浮动，每杯收益 8。'}
 };
 function businessPanel(){
   return '<div class="row">'+Object.entries(businesses).map(([key,item])=>button(item.name,'businessask',key)).join('')+'</div>';
@@ -1699,15 +1699,14 @@ const actions={
   businessask:key=>{
     const item=businesses[key];
     if(!item)return;
-    const details=typeof item.details==='function'?item.details():item.details;
+    const fees=typeof item.fees==='function'?item.fees():item.fees;
+    const active=state[item.flag];
+    const setup=active?'已'+item.action+'。':item.action+'费用 '+money(item.cost)+'。';
     const locked=item.afterDebt&&state.debt>0;
-    if(state[item.flag]){
-      open(item.name,'<p>'+item.intro+'</p><p>已'+item.action+'。'+details+'</p>'+
-        (key==='popo'?button('管理艺人开通','popoapply'):''));
-      return;
-    }
-    open(item.name,'<p>'+item.intro+'</p><p>'+item.action+'费用 '+money(item.cost)+'。'+details+'</p>'+
-      button(locked?'还清开局旧债后开放':item.action,'businessstart',key,'primary',locked||state.cash<item.cost)+button('稍后处理','close'));
+    const controls=active
+      ?(key==='popo'?button('管理艺人开通','popoapply'):'')
+      :button(locked?'还清开局旧债后开放':item.action,'businessstart',key,'primary',locked||state.cash<item.cost)+button('稍后处理','close');
+    open(item.name,'<p>'+item.intro+'</p><p>'+setup+fees+'</p><p>'+item.effect+'</p>'+controls);
   },
   businessstart:key=>{
     const item=businesses[key];
