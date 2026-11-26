@@ -42,7 +42,7 @@ const activities = {
   rest:{name:'主动休养',hint:'＋健康',cost:0},
   beauty:{name:'医美',hint:'＋颜值　可能－颜值',cost:1400},
   scout:{name:'星探发掘',hint:'发现练习生',cost:300},
-  recruit:{name:'公司招募',hint:'发现练习生或成熟艺人',cost:750},
+  recruit:{name:'公司招募',hint:'发现练习生',cost:750},
   groupwrite:{name:'团体作曲',hint:'曲库新增 1 首歌　－健康',cost:0},
   write:{name:'成员自作曲',hint:'曲库新增 1 首歌　－健康',cost:0},
   album:{name:'专辑制作',hint:'4 周后完成，艺人可照常活动',cost:0},
@@ -230,7 +230,7 @@ function artistsPage(){
   const ranking=artistSort?' <small>'+sortStats[artistSort.key]+(artistSort.direction===1?'从低到高':'从高到低')+'，团体按成员平均值</small>':'';
   const rows=artistFilter==='团体'?groups:people.filter(p=>artistFilter==='Solo'?p.solo:p.status==='trainee'||(!p.solo&&!groupOf(p)));
   if(artistSort)rows.sort((a,b)=>artistSort.direction*(artistRanking(a,artistSort.key)-artistRanking(b,artistSort.key)));
-  return '<p class="muted">签约人数 '+people.length+' / 60</p><div class="row">'+button('雇佣星探','scouts')+' '+button('公司招募','preset','recruit')+' '+button('候选人 '+state.candidates.length,'candidates')+' '+button('组建团体','debut','group')+' '+button('Solo 出道','debut','solo')+'</div>'+
+  return '<p class="muted">签约人数 '+people.length+' / 60</p><div class="row">'+button('雇佣星探','scouts')+' '+button('公司招募','preset','recruit')+' '+button('候选人 '+visibleCandidates().length,'candidates')+' '+button('组建团体','debut','group')+' '+button('Solo 出道','debut','solo')+'</div>'+
     filters+ranking+textBlock(artistFilter==='Solo'?'Solo 艺人':artistFilter,rows.map(a=>{
       const key=(a.members?'g:':'p:')+a.id, due=pendingAmount(a);
       const detail=a.members?a.members.length+' 人 · '+money(a.fans)+' 粉丝':lockedText(a)||(a.cool>state.week?'重组冷却 · '+(a.cool-state.week)+' 周':a.mood);
@@ -1423,6 +1423,10 @@ function showMonthlyReport(){
 }
 
 const scoutFees=[5000,10000,25000];
+const scoutDebutedOdds=[3,6,10];
+function scoutCandidate(level,gender){
+  return addCandidate(gender,state.debt===0&&random(1,100)<=scoutDebutedOdds[level]);
+}
 const businesses={
   popo:{name:'Popotalk',flag:'popoBusiness',cost:20000,action:'开通',intro:'聚光灯熄灭，TA 的晚安已送达。',fees:'每位开通艺人每月维护费 500。',effect:'每份订阅每月为公司带来 3 点收益。'},
   practice:{name:'练习室',flag:'practiceBusiness',cost:20000,action:'建设',intro:'这里是挥洒汗水、为梦想努力的地方。',fees:()=> '当前每月培训成本 '+money(practiceFee())+'。',effect:'每月可提升部分成员的能力值。努力的人会被看见。'},
@@ -1487,10 +1491,7 @@ function monthSystems(business){
     if(state.cash<fee){log('星探费用 '+money(fee)+' 未支付，本月没有候选人。');continue;}
     if(state.candidates.length>=24){log('候选人名单已满，星探本月暂停。');continue;}
     changeCash(-fee);
-    const p=addCandidate(gender,random(1,100)<[9,18,32][level]);
-    if(p.status==='trainee'&&level>0&&random(1,100)<=[0,25,45][level]){
-      p.fans=random(1,[0,500,1005][level]);
-    }
+    const p=scoutCandidate(level,gender);
     const stat=pick(['vocal','dance','beauty']);p[stat]=Math.max(p[stat],random([70,80,90][level],[87,95,100][level]));log('星探带来 '+p.name+' · 资金 −'+money(fee)+(p.fans?' · 自带 '+money(p.fans)+' 粉丝':''));
   }
   const subscriptionsReport=[];
@@ -1676,8 +1677,11 @@ function submitFinance(form){
   finish();
 }
 function expireCandidates(){state.candidates=state.candidates.filter(p=>p.candidateUntil==null||p.candidateUntil>state.week);}
+function visibleCandidates(){
+  return state.candidates.filter(p=>state.debt===0||p.status!=='artist');
+}
 function showCandidates(){
-  open('候选人',state.candidates.map(p=>textBlock(p.name,'<p>'+p.gender+' · '+(p.status==='artist'?'成熟艺人／有转签意向':'练习生')+' · '+escape(p.personality)+'</p><small>候选 '+countdown((p.candidateUntil??(state.week+12))-state.week)+'</small><small>歌唱 '+p.vocal+' · 舞蹈 '+p.dance+' · 颜值 '+p.beauty+' · 健康 '+p.health+' · 粉丝 '+money(p.fans)+'</small><div class="row">'+
+  open('候选人',visibleCandidates().map(p=>textBlock(p.name,'<p>'+p.gender+' · '+(p.status==='artist'?'已出道艺人 · 星探推荐':'练习生')+' · '+escape(p.personality)+'</p>'+(p.status==='artist'?'<small>原合约已到期，星探已与其取得联系。签约后以 Solo 身份活动。</small>':'')+'<small>候选 '+countdown((p.candidateUntil??(state.week+12))-state.week)+'</small><small>歌唱 '+p.vocal+' · 舞蹈 '+p.dance+' · 颜值 '+p.beauty+' · 健康 '+p.health+' · 粉丝 '+money(p.fans)+'</small><div class="row">'+
     button('签约','hire',p.id,'',state.people.length>=60)+button('略过','pass',p.id)+'</div>')).join('')||'<p>安排星探发掘或公司招募后查看。</p>');
 }
 function savedGame(value){
@@ -1724,7 +1728,7 @@ const actions={
   unshelve:arg=>{person(Number(arg)).shelved=false;finish();},
   scouts:()=>{
     const current=state.scouts||[];
-    open('雇佣星探','<p>最多同时雇佣 3 位。月底带来候选人，唱跳颜随机一项至少达到 70／80／90。</p>'+scoutFees.map((fee,i)=>textBlock('第 '+(i+1)+' 档 · '+money(fee)+'／月',
+    open('雇佣星探','<p>最多同时雇佣 3 位。月底带来候选人，唱跳颜随机一项至少达到 70／80／90。还清开局旧债后，三个档位分别有 3%／6%／10% 的概率带来已出道艺人。</p>'+scoutFees.map((fee,i)=>textBlock('第 '+(i+1)+' 档 · '+money(fee)+'／月',
       button('选择招募性别','scoutgender',i,'',current.length>=3||current.some(s=>(s.level??s)===i)))).join('')+
       current.map((scout,i)=>textBlock('已雇佣 · 第 '+((scout.level??scout)+1)+' 档 · '+(scout.gender||'不限'),button('解雇','scoutfire',i))).join(''));
   },
@@ -1786,7 +1790,7 @@ const actions={
   debut:debutForm,
   candidates:showCandidates,
   hire:arg=>{
-    const p=state.candidates.find(c=>c.id===Number(arg));
+    const p=visibleCandidates().find(c=>c.id===Number(arg));
     if(!p||state.people.length>=60)return;
     p.firstName=true;if(p.status==='artist'){p.solo=true;startTerm(p,1);}state.people.push(p);state.candidates=state.candidates.filter(c=>c.id!==p.id);finish();
     actions.rename(p.id);
