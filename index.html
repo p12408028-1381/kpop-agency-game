@@ -17,6 +17,13 @@
 .checklist .ok{color:var(--green);font-weight:700}
 .checklist .no{color:#ff9d9d;font-weight:700}
 .checklist small{color:var(--muted)}
+
+.fame-card{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#30283f;border:1px solid #88729f;border-radius:14px;padding:12px 16px;margin-bottom:10px;color:#fff}
+.fame-card span{font-variant-numeric:tabular-nums}
+.fame-bonus{color:#fff}
+.fame-bonus.locked{opacity:.48}
+.finance-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+.finance-stats .pay-note{display:block;margin-top:4px}
 </style>
 </head>
 <body><main id="app"></main><nav id="nav" aria-label="主面板" hidden></nav><dialog id="sheet"></dialog>
@@ -41,7 +48,7 @@ const BAL={
   fameGainRate:.004, fameSalesRate:.007
 };
 // 知名度：还清旧债后开启，0~100。涨粉与首周销量各吃一份系数。
-const fameTiers=[[0,'无名企划'],[20,'小有名气'],[40,'上升期公司'],[60,'业界关注'],[80,'一线企划'],[100,'国民级公司']];
+const fameTiers=[[0,'鲜为人知'],[20,'初露头角'],[40,'业内知名'],[60,'广为人知'],[80,'享誉国际']];
 function fame(){return state?.debt?0:(state?.fame||0);}
 function fameTitle(value=fame()){let title=fameTiers[0][1];for(const [min,label] of fameTiers)if(value>=min)title=label;return title;}
 function fameGainFactor(){return 1+fame()*BAL.fameGainRate;}
@@ -56,10 +63,18 @@ function addFame(amount,reason){
 }
 function famePanel(){
   if(state.debt)return '';
+  return '<button class="fame-card" data-action="famedetails" aria-label="查看公司知名度加成，当前'+fameTitle()+'，'+fame()+'点"><strong>'+fameTitle()+'</strong><span>'+fame()+' / 100</span></button>';
+}
+function fameDetails(){
+  if(state.debt)return;
   const value=fame();
-  return '<div class="fame"><div class="row spread"><strong>知名度 · '+fameTitle(value)+'</strong><span>'+value+' / 100</span></div>'+
-    '<div class="fame-bar"><span style="width:'+value+'%"></span></div>'+
-    '<small>涨粉 ×'+fameGainFactor().toFixed(2)+' · 首周销量 ×'+fameSalesFactor().toFixed(2)+'　（每 1 点知名度：涨粉 +'+(BAL.fameGainRate*100).toFixed(1)+'%，销量 +'+(BAL.fameSalesRate*100).toFixed(1)+'%）</small></div>';
+  const percent=(points,rate)=>Number((points*rate*100).toFixed(1))+'%';
+  const bonuses=points=>'涨粉 +'+percent(points,BAL.fameGainRate)+' · 首周销量 +'+percent(points,BAL.fameSalesRate);
+  const thresholds=[...fameTiers.slice(1),[100,'知名度满点']];
+  open('知名度加成','<h3>'+fameTitle()+' · '+value+' / 100</h3><p class="fame-bonus'+(value?'':' locked')+'">'+bonuses(value)+'</p>'+
+    '<p>每增加 1 点，涨粉加成提高 '+percent(1,BAL.fameGainRate)+'，首周销量加成提高 '+percent(1,BAL.fameSalesRate)+'。以下为各点数对应的累计加成。</p>'+
+    thresholds.map(([min,label])=>'<p class="fame-bonus'+(value>=min?'':' locked')+'">'+label+' · '+min+' 点 · '+(value>=min?'已激活':'未激活')+'<br>'+bonuses(min)+'</p>').join('')+
+    '<small>知名度来源：选秀成功出道 +1 · 海外演唱会 +1 · 世界中心年末拼盘 +2 · 家族演唱会 +2 · 世界巡演 +3 · 救灾捐款 +2～5。</small>');
 }
 const money = value => Number(value).toLocaleString('zh-CN');
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -265,7 +280,7 @@ function render(){
   const pending=state.inbox.filter(offerVisible).length+state.events.length+(state.promoEvents||[]).length;
   nav.hidden=false;
   nav.innerHTML='<div>'+tabs.map((name,i)=>button(name+(i===0&&pending?' · '+pending:''),'tab',i,i===tab?'active':'')).join('')+'</div>';
-  app.innerHTML='<header><div class="row spread"><small>'+escape(state.company)+' · '+escape(state.player)+'代表</small><span class="money">'+money(state.cash)+'</span></div><h1>'+tabs[tab]+'</h1><small>'+date(state.week)+'</small>'+famePanel()+'</header>'+newsNotes()+
+  app.innerHTML='<header><div class="row spread"><small>'+escape(state.company)+' · '+escape(state.player)+'代表</small><span class="money">'+money(state.cash)+'</span></div><h1>'+tabs[tab]+'</h1><small>'+date(state.week)+'</small>'+'</header>'+newsNotes()+
     (storageFailed?'<p class="danger">浏览器目前无法自动保存。可在公司页导出存档。</p>':'')+
     [weekPage,artistsPage,worksPage,companyPage][tab]();
   rotateNews();
@@ -345,18 +360,23 @@ function worksPage(){
 }
 const milestones=[['release','发行接手后的首部作品'],['paid','还清旧债 · 解锁演唱会'],['local','完成首次韩国专场'],['arena','完成首次大型演唱会'],['family','完成首次家族演唱会'],['abroad','完成海外首演'],['announced','官宣世界巡演'],['tourDone','完成世界巡演']];
 function companyPage(){
-  const ledger='<div class="stats"><div><small>可用现金</small>'+money(state.cash)+'</div><div><small>上月收入</small>'+money(state.lastMonthIncome||0)+'</div><div><small>工资池（'+(BAL.salaryRate*100)+'%）</small>'+money(wages())+'</div><div><small>旧债</small>'+money(state.debt)+'</div></div>';
-  return famePanel()+
-    (state.debt?'':'<p class="muted">知名度来源：选秀成功出道 +1 · 海外演唱会 +1 · 世界中心年末拼盘 +2 · 家族演唱会 +2 · 世界巡演 +3 · 救灾捐款 +2~5。满 100 时：涨粉 ×'+(1+100*BAL.fameGainRate).toFixed(2)+'，首周销量 ×'+(1+100*BAL.fameSalesRate).toFixed(2)+'。</p>')+
-    donationPanel()+
-    textBlock('财务与工资',ledger+'<p class="muted">工资按上月收入的 '+(BAL.salaryRate*100)+'% 从现金中自动分出，收入为 0 的月份不扣钱、不产生欠薪。</p><div class="row" style="margin-top:10px">'+button('偿还旧债','finance','debt','',!state.debt)+button('借款','finance','borrow','',Boolean(state.debt||state.loan))+button('偿还借款','finance','loan','',!state.loan)+'</div>')+
+  const pay=wages();
+  const payNote=pay?'本月底将发放工资 '+money(pay):'本月无需发薪';
+  const ledger='<div class="stats finance-stats"><div><small>可用现金</small>'+money(state.cash)+'</div>'+
+    '<div><small>上月收入</small>'+money(state.lastMonthIncome||0)+'<small class="pay-note">'+payNote+'</small></div>'+
+    (state.debt?'<div><small>旧债</small>'+money(state.debt)+'</div>':'')+
+    '<div><small>待还借款</small>'+money(state.loan)+'</div></div>';
+  return famePanel()+donationPanel()+
+    textBlock('公司财务',ledger+'<div class="row" style="margin-top:10px">'+
+      (state.debt?button('偿还旧债','finance','debt'):'')+button('借款','finance','borrow','',Boolean(state.debt||state.loan))+
+      button('偿还借款','finance','loan','',!state.loan)+'</div>')+
     textBlock('业务开发',businessPanel())+
     textBlock('公司发展',milestones.map(([key,label])=>'<p>'+ (state.flags[key]?'✓　':'○　')+label+'</p>').join(''))+
     textBlock('演唱会',(state.debt?'<p class="muted">还清开局旧债后开放自办演唱会。</p>':'')+
       '<div class="row">'+Object.keys(venues).map(key=>button(venues[key].name,key==='tour'?'tour':'concert',key,'',Boolean(state.debt)||(key==='family'&&(month(state.week)!==11||state.familyInvite!=='open')))).join('')+'</div>'+
       (state.tour?'<p>巡演 · '+escape(target(state.tour.target)?.name||'艺人')+' · 已完成 '+state.tour.stops+' / 3 站</p>':''))+
     textBlock('年度分账',splitRows().length?button('查看待分账','split'):'<small>12 月结算后生成账单。</small>')+
-    textBlock('存档与短信','<div class="row">'+button('主线短信','messages')+button('导出存档','export')+button('导入存档','import')+button('重新开局','restartask')+'</div>');
+    textBlock('存档与短信','<div class="row">'+button('短信回顾','messages')+button('导出存档','export')+button('导入存档','import')+button('重新开局','restartask')+'</div>');
 }
 function confirmAction(title,body,action,arg){
   open(title,'<p>'+escape(body)+'</p>'+button('确认',''+action,arg,'primary'));
@@ -2147,7 +2167,7 @@ const businesses={
   cafeteria:{name:'食堂',flag:'cafeteriaBusiness',cost:25000,action:'建设',intro:'公司的减脂餐真的好吃！吗？',fees:'每月维护成本 5,000。',effect:'每月为成员恢复一定健康值。'},
   merch:{afterDebt:true,name:'周边自研',flag:'merchBusiness',cost:50000,action:'研发',intro:'又在制作精美小垃圾了。',fees:'含周边专辑的制作费增加 5,000。',effect:'含周边专辑售价提升 15%。'},
   cafe:{afterDebt:true,name:'应援咖啡厅',flag:'cafeBusiness',cost:80000,action:'建设',intro:'今天的咖啡是爱豆的特调',fees:'每月维护费 4,000。',effect:'到店顾客随公司人气浮动，每杯收益 8。'},
-  security:{afterDebt:true,name:'安保部',flag:'securityBusiness',cost:60000,action:'组建',intro:'门口的灯，从今天起整夜亮着。',fees:'每月维护成本 4,000。',effect:'私生事件出现概率降至 35%，事件里的「加强安保」不再产生费用。卡车不在此列。'}
+  security:{afterDebt:true,name:'安保部',flag:'securityBusiness',cost:60000,action:'组建',intro:'门口的灯，从今天起整夜亮着。',fees:'每月维护成本 4,000。',effect:'私生事件出现概率降至 35%，事件里的「加强安保」不再产生费用。'}
 };
 function businessPanel(){
   return '<div class="row">'+Object.entries(businesses).map(([key,item])=>button(item.name,'businessask',key)).join('')+'</div>';
@@ -2568,6 +2588,7 @@ function savedGame(value){
   return value.people.length<=60&&value.queue.length<=4&&value.rivals.length===3&&value.flags&&typeof value.flags==='object';
 }
 const actions={
+  famedetails:fameDetails,
   close:()=>{
     const source=sheet.querySelector('#rename')?.dataset.source;
     if(source){if(source==='transfer')actions.transfer();else showCandidates(source);return;}
@@ -2742,7 +2763,7 @@ const actions={
     const m=state.messages.find(x=>x.id===Number(arg));m.read=true;save();render();
     open(m.title,escape(m.body).split('\n').map(s=>'<p>'+s+'</p>').join(''));
   },
-  messages:()=>open('主线短信',state.messages.filter(m=>m.fromUncle||(m.fromUncle==null&&['叔叔汇来 20,000','旧债已还清','第一次小型演唱会','海外第一站','世界巡演官宣','三站巡演完成'].includes(m.title))).map(m=>'<p>'+button((m.read?'':'● ')+m.title,'message',m.id)+'</p>').join('')||'<p>还没有短信。</p>'),
+  messages:()=>open('短信回顾',state.messages.filter(m=>m.fromUncle||(m.fromUncle==null&&['叔叔汇来 20,000','旧债已还清','第一次小型演唱会','海外第一站','世界巡演官宣','三站巡演完成'].includes(m.title))).map(m=>'<p>'+button((m.read?'':'● ')+m.title,'message',m.id)+'</p>').join('')||'<p>还没有短信。</p>'),
   annualapply:()=>{
     if(state.annual?.status!=='open'||month(state.week)!==10)return;
     const rows=festivalCandidates();
